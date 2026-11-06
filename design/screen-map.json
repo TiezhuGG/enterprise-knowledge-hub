@@ -1,0 +1,218 @@
+[
+  {
+    "id": "UI-01",
+    "title": "登录与身份校验",
+    "phase": "P1",
+    "page": 1
+  },
+  {
+    "id": "UI-02",
+    "title": "工作空间选择",
+    "phase": "P1",
+    "page": 2
+  },
+  {
+    "id": "UI-03",
+    "title": "工作空间总览",
+    "phase": "P1",
+    "page": 3
+  },
+  {
+    "id": "UI-04",
+    "title": "智能问答",
+    "phase": "P1",
+    "page": 4
+  },
+  {
+    "id": "UI-05",
+    "title": "引用与证据核验",
+    "phase": "P1",
+    "page": 5
+  },
+  {
+    "id": "UI-06",
+    "title": "问答历史",
+    "phase": "P1",
+    "page": 6
+  },
+  {
+    "id": "UI-07",
+    "title": "全局知识搜索",
+    "phase": "P1",
+    "page": 7
+  },
+  {
+    "id": "UI-08",
+    "title": "知识库列表",
+    "phase": "P1",
+    "page": 8
+  },
+  {
+    "id": "UI-09",
+    "title": "新建与配置知识库",
+    "phase": "P1",
+    "page": 9
+  },
+  {
+    "id": "UI-10",
+    "title": "文档详情",
+    "phase": "P1",
+    "page": 10
+  },
+  {
+    "id": "UI-11",
+    "title": "上传与导入",
+    "phase": "P1",
+    "page": 11
+  },
+  {
+    "id": "UI-12",
+    "title": "解析与处理任务",
+    "phase": "P1",
+    "page": 12
+  },
+  {
+    "id": "UI-13",
+    "title": "文档版本与发布",
+    "phase": "P1",
+    "page": 13
+  },
+  {
+    "id": "UI-14",
+    "title": "数据连接器",
+    "phase": "P2",
+    "page": 14
+  },
+  {
+    "id": "UI-15",
+    "title": "同步任务与日志",
+    "phase": "P2",
+    "page": 15
+  },
+  {
+    "id": "UI-16",
+    "title": "检索调试",
+    "phase": "P2",
+    "page": 16
+  },
+  {
+    "id": "UI-17",
+    "title": "知识图谱",
+    "phase": "P3",
+    "page": 17
+  },
+  {
+    "id": "UI-18",
+    "title": "实体详情与纠错",
+    "phase": "P3",
+    "page": 18
+  },
+  {
+    "id": "UI-19",
+    "title": "Agent 列表",
+    "phase": "P3",
+    "page": 19
+  },
+  {
+    "id": "UI-20",
+    "title": "Agent 编排",
+    "phase": "P3",
+    "page": 20
+  },
+  {
+    "id": "UI-21",
+    "title": "Agent 运行详情",
+    "phase": "P3",
+    "page": 21
+  },
+  {
+    "id": "UI-22",
+    "title": "审批中心",
+    "phase": "P3",
+    "page": 22
+  },
+  {
+    "id": "UI-23",
+    "title": "评测集",
+    "phase": "P1",
+    "page": 23
+  },
+  {
+    "id": "UI-24",
+    "title": "评测结果与方案对比",
+    "phase": "P2",
+    "page": 24
+  },
+  {
+    "id": "UI-25",
+    "title": "用户反馈与整改",
+    "phase": "P1",
+    "page": 25
+  },
+  {
+    "id": "UI-26",
+    "title": "成员与组织",
+    "phase": "P1",
+    "page": 26
+  },
+  {
+    "id": "UI-27",
+    "title": "角色与资源权限",
+    "phase": "P1",
+    "page": 27
+  },
+  {
+    "id": "UI-28",
+    "title": "模型与路由配置",
+    "phase": "P1",
+    "page": 28
+  },
+  {
+    "id": "UI-29",
+    "title": "密钥与服务凭据",
+    "phase": "P1",
+    "page": 29
+  },
+  {
+    "id": "UI-30",
+    "title": "审计日志",
+    "phase": "P1",
+    "page": 30
+  },
+  {
+    "id": "UI-31",
+    "title": "运行监控与运维",
+    "phase": "P1 / P4",
+    "page": 31
+  },
+  {
+    "id": "UI-32",
+    "title": "工作空间设置",
+    "phase": "P1",
+    "page": 32
+  },
+  {
+    "id": "S-01",
+    "title": "公共状态与恢复路径",
+    "phase": "shared",
+    "page": 33
+  },
+  {
+    "id": "S-02",
+    "title": "关键弹窗与确认信息",
+    "phase": "shared",
+    "page": 34
+  },
+  {
+    "id": "S-03",
+    "title": "移动端查阅、问答与审批",
+    "phase": "shared",
+    "page": 35
+  },
+  {
+    "id": "S-04",
+    "title": "设计系统 / Calm knowledge",
+    "phase": "shared",
+    "page": 36
+  }
+]
