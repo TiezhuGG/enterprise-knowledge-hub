@@ -30,9 +30,10 @@ npm run dev
 | apps/api | NestJS HTTP 进程 | 存活、开发认证与知识库/文档权限接口 |
 | apps/worker | 独立 NestJS 应用上下文 + BullMQ | PG持久处理任务与开发 ping |
 | packages/contracts | 前后端共享的数据契约 | 存活响应、开发队列名称与输入 |
+| packages/parser | 独立结构解析子进程 | TXT、Markdown、PDF、DOCX及资源限额 |
 | packages/config | 服务端配置入口 | API 与 Redis 配置校验，不导出给前端 |
 
-API 不依赖 Worker 进程，可独立启动、停止和部署；Worker 通过共享资源包访问 PostgreSQL/S3 并消费 Redis，不请求 API。production 下关闭开发 ping；业务任务由 P1-05 的持久状态机执行，当前仅校验原文并等待解析器，见 [任务说明](p1-05-ingestion-jobs.md)。
+API 不依赖 Worker 进程，可独立启动、停止和部署；Worker 通过共享资源包访问 PostgreSQL/S3 并消费 Redis，不请求 API。production 下关闭开发 ping；业务任务由 P1-05 的持久状态机执行，现已校验原文并执行结构解析，见 [任务说明](p1-05-ingestion-jobs.md) 和 [解析说明](p1-06-document-parsing.md)。
 
 ```sh
 npm run build
@@ -75,3 +76,5 @@ npm run smoke:queue
 ## 尚待业务确认
 
 试点部门、脱敏数据、身份源、模型出站边界、对象存储许可与生产基础设施仍待确认。P1-01 可独立推进，不把 P0 业务评审标记为通过。P1-02 已提供明确标记的开发身份，企业 OIDC 集成仍需确认实际身份方案。
+
+P1-06 完整链路测试：`npm run test:parsing`；需要 PostgreSQL、Redis 和开发 S3，使用独立测试命名空间。

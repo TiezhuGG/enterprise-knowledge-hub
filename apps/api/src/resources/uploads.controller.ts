@@ -45,6 +45,12 @@ export class VersionsController {
   constructor(private readonly store:Resources){}
   @Get() list(@Req() req:AuthRequest,@Param('documentId') doc:string,@Query() query:unknown){object(query,['limit','cursor']);return this.store.listVersions(req.identity!,id(doc),listInput(query))}
   @Get(':versionId') get(@Req() req:AuthRequest,@Param('documentId') doc:string,@Param('versionId') version:string){return this.store.getVersion(req.identity!,id(doc),id(version)).then(data=>({data}))}
+  @Get(':versionId/parsed')
+  parsed(@Req() req:AuthRequest,@Param('documentId') doc:string,@Param('versionId') version:string,@Query() raw:unknown){
+    const query=object(raw,['limit','cursor','page']);const {page,...paging}=query;const input=listInput(paging);let number:number|undefined;
+    if(page!==undefined){number=Number(page);if(typeof page!=='string'||!Number.isInteger(number)||number<1||number>1000)fail(400,'INVALID_PAGE')}
+    return this.store.getParsed(req.identity!,id(doc),id(version),{limit:input.limit,cursor:input.cursor,page:number}).then(data=>({data}));
+  }
   @Get(':versionId/content')
   async content(@Req() req:AuthRequest,@Param('documentId') docValue:string,@Param('versionId') versionValue:string,@Res() res:Response){
     const doc=id(docValue),version=id(versionValue);const {bytes,metadata}=await this.store.sourceForDownload(req.identity!,doc,version);

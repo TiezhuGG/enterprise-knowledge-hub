@@ -12,11 +12,12 @@ export function validateUpload(input:UploadInput,limits:UploadLimits){
   if(input.size>limits.maxBytes)fail(413,'UPLOAD_TOO_LARGE');
   if(typeof input.sha256!=='string'||!/^[a-f0-9]{64}$/.test(input.sha256))fail(400,'INVALID_SHA256');
   const suffix=input.filename.toLowerCase().split('.').at(-1);
-  if(!((suffix==='pdf'&&input.mime==='application/pdf')||(suffix==='txt'&&input.mime==='text/plain')||(suffix==='md'&&['text/markdown','text/plain'].includes(input.mime))))fail(415,'UNSUPPORTED_FILE_TYPE');
+  if(!((suffix==='docx'&&input.mime==='application/vnd.openxmlformats-officedocument.wordprocessingml.document')||(suffix==='pdf'&&input.mime==='application/pdf')||(suffix==='txt'&&input.mime==='text/plain')||(suffix==='md'&&['text/markdown','text/plain'].includes(input.mime))))fail(415,'UNSUPPORTED_FILE_TYPE');
 }
 export function verifyBytes(bytes:Buffer,input:Pick<UploadInput,'size'|'mime'|'sha256'>){
   if(bytes.length!==input.size||sha256(bytes)!==input.sha256)fail(422,'CONTENT_MISMATCH');
-  if(input.mime==='application/pdf') {if(bytes.subarray(0,5).toString('ascii')!=='%PDF-')fail(415,'FILE_SIGNATURE_MISMATCH')}
+  if(input.mime==='application/vnd.openxmlformats-officedocument.wordprocessingml.document'){if(!bytes.subarray(0,4).equals(Buffer.from([0x50,0x4b,0x03,0x04])))fail(415,'FILE_SIGNATURE_MISMATCH')}
+  else if(input.mime==='application/pdf') {if(bytes.subarray(0,5).toString('ascii')!=='%PDF-')fail(415,'FILE_SIGNATURE_MISMATCH')}
   else {
     try{new TextDecoder('utf-8',{fatal:true}).decode(bytes)}catch{fail(415,'INVALID_UTF8')}
     if(bytes.includes(0)||bytes.subarray(0,5).toString('ascii')==='%PDF-'||bytes.subarray(0,2).toString('ascii')==='PK')fail(415,'FILE_SIGNATURE_MISMATCH');

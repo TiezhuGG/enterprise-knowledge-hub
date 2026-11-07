@@ -18,6 +18,7 @@
     "@zhiheng/contracts": "0.1.0",
     "@zhiheng/config": "0.1.0",
     "bullmq": "^5.0.0",
-    "@zhiheng/resources": "0.1.0"
+    "@zhiheng/resources": "0.1.0",
+    "@zhiheng/parser": "0.1.0"
   }
 }

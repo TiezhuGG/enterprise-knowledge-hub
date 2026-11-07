@@ -9,7 +9,7 @@ import { sha256, type ObjectStore } from './objects';
 import { validateUpload, verifyBytes, type UploadInput, type UploadLimits } from './upload-validation';
 
 export class UploadStore extends ResourceStore {
-  constructor(url:string|undefined,schema:string|undefined,secret:string|undefined,private readonly objects:ObjectStore,readonly uploadLimits:UploadLimits) {super(url,schema,secret)}
+  constructor(url:string|undefined,schema:string|undefined,secret:string|undefined,protected readonly objects:ObjectStore,readonly uploadLimits:UploadLimits) {super(url,schema,secret)}
   private async quotaLock(client:PoolClient,tenant:string){await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`upload-quota:${tenant}`])}
   private ticketView(row:any):UploadTicket {return {ticket_id:row.id,document_id:row.assigned_document_id,status:row.status,expires_at:row.expires_at.toISOString(),max_size:this.uploadLimits.maxBytes,
     upload:{method:'PUT',url:`/api/v1/upload-tickets/${row.id}/content`,headers:{'Content-Type':row.mime}},finalize_url:`/api/v1/upload-tickets/${row.id}/finalize`}}
@@ -78,7 +78,7 @@ export class UploadStore extends ResourceStore {
     return this.result(client,member.tenant_id,ticket.assigned_document_id,versionId);
   });}
   private versionView(row:any):DocumentVersion{return {id:row.id,document_id:row.document_id,version_no:row.version_no,filename:row.filename,size:row.size,mime:row.mime,sha256:row.content_sha256,scan_status:row.scan_status,created_at:row.created_at.toISOString(),is_latest:row.id===row.latest_version_id,is_published:row.id===row.published_version_id}}
-  private async version(client:PoolClient,member:IdentityContext,documentId:string,versionId:string,download=false){
+  protected async version(client:PoolClient,member:IdentityContext,documentId:string,versionId:string,download=false){
     const doc=await this.doc(client,member,documentId,download?'download':'read');
     const result=await client.query(`SELECT v.*,a.object_key,a.object_version,a.size,a.mime,a.filename,a.scan_status,d.latest_version_id,d.published_version_id FROM document_version v JOIN source_asset a ON a.tenant_id=v.tenant_id AND a.id=v.source_asset_id JOIN document d ON d.tenant_id=v.tenant_id AND d.id=v.document_id WHERE v.tenant_id=$1 AND v.document_id=$2 AND v.id=$3`,[member.tenant_id,documentId,versionId]);
     const row=result.rows[0];if(!row)fail(404,'RESOURCE_UNAVAILABLE');

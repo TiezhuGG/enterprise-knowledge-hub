@@ -1,12 +1,13 @@
 import type { PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 export const INTAKE_PIPELINE='intake-v1';
-export interface IngestionConfig {leaseMs:number;deadlineMs:number;retryMs:number;reconcileMs:number;pollMs:number;queue:string;maxAttempts:number}
+export interface IngestionConfig {leaseMs:number;deadlineMs:number;retryMs:number;reconcileMs:number;pollMs:number;queue:string;maxAttempts:number;parserEnabled:boolean}
 export function ingestionConfig(env:NodeJS.ProcessEnv=process.env):IngestionConfig {
   const number=(key:string,fallback:number,min:number,max:number)=>{const value=Number(env[key]??fallback);if(!Number.isInteger(value)||value<min||value>max)throw new Error(`Invalid ${key}`);return value};
   const queue=env.INGEST_QUEUE??'knowledge-ingestion';if(!/^[a-zA-Z0-9_-]{1,100}$/.test(queue))throw new Error('Invalid INGEST_QUEUE');
   const leaseMs=number('INGEST_LEASE_MS',15000,1000,120000),deadlineMs=number('INGEST_DEADLINE_MS',120000,1000,600000);
-  return {leaseMs,deadlineMs,retryMs:number('INGEST_RETRY_MS',1000,100,60000),reconcileMs:number('INGEST_RECONCILE_MS',10000,500,300000),pollMs:number('INGEST_POLL_MS',1000,100,10000),queue,maxAttempts:number('INGEST_MAX_ATTEMPTS',3,1,10)};
+  if(env.PARSER_ENABLED&&!['true','false'].includes(env.PARSER_ENABLED))throw new Error('Invalid PARSER_ENABLED');
+  return {parserEnabled:env.PARSER_ENABLED!=='false',leaseMs,deadlineMs,retryMs:number('INGEST_RETRY_MS',1000,100,60000),reconcileMs:number('INGEST_RECONCILE_MS',10000,500,300000),pollMs:number('INGEST_POLL_MS',1000,100,10000),queue,maxAttempts:number('INGEST_MAX_ATTEMPTS',3,1,10)};
 }
 export async function ensureIngestionJob(client:PoolClient,tenant:string,version:string,maxAttempts=3){
   const inserted=await client.query(`INSERT INTO ingestion_job(tenant_id,id,kb_id,document_id,version_id,outbox_id,owner_id,executor_id,max_attempts)

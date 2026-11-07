@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import { ParsedPanel } from './ParsedPanel';
+import { Modal } from 'antd';
 import { JobsPanel } from './JobsPanel';
 import { Alert, Button, Card, Empty, List, Space, Tag, Typography } from 'antd';
 import type { DocumentVersion, FinalizedUpload, KnowledgeBase, KnowledgeDocument, ResourcePage, SessionInfo, UploadTicket } from '@zhiheng/contracts';
-const failure=(status:number)=>status===404?'内容不可用或无权访问。':status===401?'登录已失效，请重新登录。':status===410?'上传票据已过期，请重新上传。':status===413?'文件超过当前上传大小限制。':status===415?'文件格式或实际内容不受支持，请使用 UTF-8 TXT、Markdown 或 PDF。':status===422?'文件大小或校验值不一致，请重新选择文件。':status===409?'文档或上传状态已变化，请刷新并确认目标后重试。':status===429?'上传额度或并发已达上限，请稍后重试。':'服务暂时不可用，请重试。';
+const failure=(status:number)=>status===404?'内容不可用或无权访问。':status===401?'登录已失效，请重新登录。':status===410?'上传票据已过期，请重新上传。':status===413?'文件超过当前上传大小限制。':status===415?'文件格式或实际内容不受支持，请使用 UTF-8 TXT、Markdown、PDF 或 DOCX。':status===422?'文件大小或校验值不一致，请重新选择文件。':status===409?'文档或上传状态已变化，请刷新并确认目标后重试。':status===429?'上传额度或并发已达上限，请稍后重试。':'服务暂时不可用，请重试。';
 interface Attempt {fingerprint:string;key:string;ticket?:UploadTicket;finalizeKey:string}
 export function DocumentsPanel({kb,session,onExpired}:{kb:KnowledgeBase;session:SessionInfo;onExpired:()=>void}) {
+  const [parsedVersion,setParsedVersion]=useState<DocumentVersion|null>(null);
   const [documents,setDocuments]=useState<KnowledgeDocument[]>([]),[next,setNext]=useState<string|null>(null);
   const [versions,setVersions]=useState<DocumentVersion[]>([]),[versionNext,setVersionNext]=useState<string|null>(null),[viewing,setViewing]=useState<KnowledgeDocument|null>(null);
   const [target,setTarget]=useState<KnowledgeDocument|null>(null),[file,setFile]=useState<File|null>(null);
@@ -30,7 +33,7 @@ export function DocumentsPanel({kb,session,onExpired}:{kb:KnowledgeBase;session:
     try{
       if(file.size<1||file.size>52428800)throw new Error('文件为空或超过 50 MiB，请重新选择。');
       const bytes=await file.arrayBuffer();const digest=await crypto.subtle.digest('SHA-256',bytes);const sha=[...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,'0')).join('');
-      const suffix=file.name.toLowerCase().split('.').at(-1),mime=suffix==='pdf'?'application/pdf':suffix==='md'?'text/markdown':'text/plain';
+      const suffix=file.name.toLowerCase().split('.').at(-1),mime=suffix==='pdf'?'application/pdf':suffix==='docx'?'application/vnd.openxmlformats-officedocument.wordprocessingml.document':suffix==='md'?'text/markdown':'text/plain';
       const body=JSON.stringify({kb_id:kb.id,...(target?{document_id:target.id}:{}),filename:file.name,size:file.size,mime,sha256:sha});
       if(attempt.current?.fingerprint!==body)attempt.current={fingerprint:body,key:crypto.randomUUID(),finalizeKey:crypto.randomUUID()};
       const current=attempt.current!;
@@ -50,8 +53,8 @@ export function DocumentsPanel({kb,session,onExpired}:{kb:KnowledgeBase;session:
     {message&&<Alert role="status" type="info" showIcon message={message}/>}
     {kb.capabilities.includes('write')&&<Card size="small" title={target?`上传新版本：${target.title}`:'上传新文档'}>
       <Space direction="vertical" style={{width:'100%'}}>
-        <Typography.Text type="secondary">支持 UTF-8 TXT、Markdown 和 PDF。上传后保持草稿，处理与发布将在后续接入。</Typography.Text>
-        <input ref={input} aria-label="选择上传文件" type="file" accept=".txt,.md,.pdf" disabled={busy} onChange={event=>{attempt.current=null;setFile(event.target.files?.[0]??null);setError('');setMessage('')}}/>
+        <Typography.Text type="secondary">支持 UTF-8 TXT、Markdown、PDF 和 DOCX。上传后保持草稿，可查看解析结构；索引与发布将在后续接入。</Typography.Text>
+        <input ref={input} aria-label="选择上传文件" type="file" accept=".txt,.md,.pdf,.docx" disabled={busy} onChange={event=>{attempt.current=null;setFile(event.target.files?.[0]??null);setError('');setMessage('')}}/>
         <Space wrap><Button type="primary" loading={busy} disabled={!file} onClick={()=>void upload()}>上传并登记版本</Button>{busy&&<Button onClick={()=>controller.current?.abort()}>停止上传</Button>}{target&&!busy&&<Button onClick={()=>chooseTarget(null)}>改为新文档</Button>}</Space>
       </Space>
     </Card>}
@@ -63,9 +66,10 @@ export function DocumentsPanel({kb,session,onExpired}:{kb:KnowledgeBase;session:
     {next&&<Button disabled={busy} onClick={()=>void load(next).catch(()=>setError('文档加载失败，请重试。'))}>加载更多文档</Button>}
     {viewing&&viewing.capabilities.some(action=>['write','manage'].includes(action))&&<JobsPanel key={viewing.id} document={viewing} session={session} onExpired={onExpired}/>}
     {viewing&&<Card size="small" title={`${viewing.title} · 版本`}>
-      <List className="knowledge-list" dataSource={versions} locale={{emptyText:'暂无可见版本'}} renderItem={version=><List.Item actions={viewing.capabilities.includes('download')?[<Button key="download" href={`/api/v1/documents/${viewing.id}/versions/${version.id}/content`}>下载原文件</Button>]:[]}>
+      <List className="knowledge-list" dataSource={versions} locale={{emptyText:'暂无可见版本'}} renderItem={version=><List.Item actions={[<Button key="parsed" onClick={()=>setParsedVersion(version)}>解析预览</Button>,...(viewing.capabilities.includes('download')?[<Button key="download" href={`/api/v1/documents/${viewing.id}/versions/${version.id}/content`}>下载原文件</Button>]:[])]}>
         <List.Item.Meta title={<Space wrap>{`v${version.version_no}`}{version.is_latest&&<Tag>最新上传</Tag>}{version.is_published&&<Tag>已发布</Tag>}</Space>} description={`${version.filename} · ${version.size} 字节 · ${version.scan_status==='pending'?'待安全检查与解析':version.scan_status==='clean'?'安全检查通过':'已拒绝'}`}/>
       </List.Item>}/>{versionNext&&<Button onClick={()=>void showVersions(viewing,versionNext)}>加载更多版本</Button>}
     </Card>}
+    <Modal title="文档结构与原文定位" open={!!parsedVersion} onCancel={()=>setParsedVersion(null)} footer={null} width={900} destroyOnHidden>{viewing&&parsedVersion&&<ParsedPanel key={parsedVersion.id} documentId={viewing.id} version={parsedVersion} allowDownload={viewing.capabilities.includes('download')} session={session} onExpired={onExpired}/>}</Modal>
   </Space>;
 }

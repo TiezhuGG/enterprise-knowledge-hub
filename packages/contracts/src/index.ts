@@ -60,3 +60,21 @@ export interface IngestionDetails extends IngestionJob {
   attempts:Array<{run_no:number;attempt_no:number;status:string;error_code:string|null;started_at:string;ended_at:string|null}>;
   events:Array<{seq:number;run_no:number;status:string;stage:string;error_code:string|null;occurred_at:string}>;
 }
+
+export type ParsedKind='heading'|'paragraph'|'list_item'|'table'|'code'|'header'|'footer';
+export interface SourceLocation {
+  type:'text'|'pdf'|'docx';char_start?:number;char_end?:number;line_start?:number;line_end?:number;
+  page?:number;bbox?:[number,number,number,number];page_width?:number;page_height?:number;
+  part?:string;paragraph_index?:number;table_index?:number;row_index?:number;cell_index?:number;
+}
+export interface ParsedCell {text:string;col_span:number;v_merge?:'restart'|'continue';source?:SourceLocation}
+export interface ParsedBlock {id?:string;ordinal:number;kind:ParsedKind;text:string;heading_path:string[];source:SourceLocation;level?:number;table?:{header_rows:number;rows:ParsedCell[][]}}
+export interface ParseWarning {code:string;severity:'info'|'review';page?:number;part?:string}
+export interface ParsedDocument {
+  parser_version:string;source_sha256:string;format:'txt'|'markdown'|'pdf'|'docx';page_count:number|null;
+  blocks:ParsedBlock[];warnings:ParseWarning[];
+  metrics:{characters:number;blocks:number;tables:number;empty_pages:number;replacement_characters:number};
+}
+export interface ParsedPreview {document_id:string;version_id:string;result:ParsedDocument;page:{next_cursor:string|null;has_more:boolean};total_blocks:number}
+
+export const STRUCTURE_PARSER_VERSION='structure-v1';

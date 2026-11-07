@@ -13,7 +13,7 @@
   "packageManager": "npm@11.9.0",
   "scripts": {
     "dev": "npm run build && concurrently --kill-others -n api,worker,web,api-ts,worker-ts \"npm run dev -w @zhiheng/api\" \"npm run dev -w @zhiheng/worker\" \"npm run dev -w @zhiheng/web\" \"npm run watch -w @zhiheng/api\" \"npm run watch -w @zhiheng/worker\"",
-    "build:packages": "npm run build -w @zhiheng/contracts && npm run build -w @zhiheng/config && npm run build -w @zhiheng/resources",
+    "build:packages": "npm run build -w @zhiheng/contracts && npm run build -w @zhiheng/config && npm run build -w @zhiheng/resources && npm run build -w @zhiheng/parser",
     "build": "npm run build:packages && npm run build --workspaces --if-present --include-workspace-root=false",
     "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present",
     "test": "npm run build && node --test scripts/*.test.mjs",
@@ -29,7 +29,8 @@
     "uploads:cleanup": "npm run uploads:cleanup -w @zhiheng/resources --",
     "test:uploads": "node --env-file-if-exists=.env --test scripts/uploads.integration.mjs",
     "storage:dev": "moto_server -H 127.0.0.1 -p 9000",
-    "test:ingestion": "node --env-file-if-exists=.env --test scripts/ingestion.integration.mjs"
+    "test:ingestion": "node --env-file-if-exists=.env --test scripts/ingestion.integration.mjs",
+    "test:parsing": "node --env-file-if-exists=.env --test scripts/parsing.integration.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
