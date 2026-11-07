@@ -23,7 +23,7 @@ test('invalid port configuration fails before startup', () => {
   assert.equal(apiConfig({}).host, '127.0.0.1');
 });
 
-test('API boots without storage, exposes liveness only and restarts', { timeout: 20000 }, async () => {
+test('API boots without storage, protects resource endpoints and restarts', { timeout: 20000 }, async () => {
   const port = await freePort();
   for (let attempt = 0; attempt < 2; attempt++) {
     const child = spawn(process.execPath, ['apps/api/dist/main.js'], {
@@ -48,7 +48,7 @@ test('API boots without storage, exposes liveness only and restarts', { timeout:
       assert.equal(body.status, 'ok');
       assert.ok(Number.isFinite(Date.parse(body.timestamp)));
       const missing = await fetch(`http://127.0.0.1:${port}/api/v1/knowledge-bases`);
-      assert.equal(missing.status, 404);
+      assert.equal(missing.status, 401);
     } finally {
       child.kill('SIGTERM');
       const [code, signal] = await exited;

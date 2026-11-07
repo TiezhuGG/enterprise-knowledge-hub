@@ -3,6 +3,8 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Redis } from 'ioredis';
 import { authConfig, redisConfig } from '@zhiheng/config';
 import type { SessionInfo } from '@zhiheng/contracts';
+import { Resources } from '../resources/resources.module';
+import { ResourceError } from '@zhiheng/resources';
 import { developmentIdentity } from './identity';
 
 export const SESSION_COOKIE = 'zhiheng_session';
@@ -13,6 +15,14 @@ interface StoredSession { account: string; csrf: string; expires: number }
 @Injectable()
 export class AuthService implements OnModuleDestroy {
   readonly config = authConfig();
+  constructor(private readonly resources: Resources) {}
+  private async profile(account: string) {
+    const profile = developmentIdentity(account, this.config.disabledAccounts);
+    if (!profile) return null;
+    if (!process.env.DATABASE_URL) return profile; // Auth-only isolated fixture mode; resource access still requires PostgreSQL.
+    try { return { ...profile, identity: await this.resources.identity(profile.identity) }; }
+    catch (error) { if (error instanceof ResourceError && error.status === 401) return null; throw error; }
+  }
   private redis?: Redis;
   private connecting?: Promise<void>;
   private client() {
@@ -39,8 +49,9 @@ export class AuthService implements OnModuleDestroy {
     if (origin !== this.config.origin) throw new ForbiddenException('Invalid request origin');
   }
   async login(account: string, secret: string, previous?: string) {
-    const profile = developmentIdentity(account, this.config.disabledAccounts);
-    if (!equalSecret(secret, this.config.secret) || !profile) throw new UnauthorizedException('Invalid development credentials');
+    if (!equalSecret(secret, this.config.secret)) throw new UnauthorizedException('Invalid development credentials');
+    const profile = await this.profile(account);
+    if (!profile) throw new UnauthorizedException('Invalid development credentials');
     const token = randomBytes(32).toString('base64url');
     const csrf = randomBytes(32).toString('base64url');
     const expires = Date.now() + this.config.ttl * 1000;
@@ -55,7 +66,7 @@ export class AuthService implements OnModuleDestroy {
     let stored: StoredSession;
     try { stored = JSON.parse(raw); } catch { return null; }
     if (!stored || typeof stored !== 'object' || typeof stored.account !== 'string' || typeof stored.csrf !== 'string' || !Number.isFinite(stored.expires) || stored.expires <= Date.now()) return null;
-    const profile = developmentIdentity(stored.account, this.config.disabledAccounts);
+    const profile = await this.profile(stored.account);
     if (!profile) { await this.revoke(token); return null; }
     return { ...profile, expires_at: new Date(stored.expires).toISOString(), csrf_token: stored.csrf };
   }

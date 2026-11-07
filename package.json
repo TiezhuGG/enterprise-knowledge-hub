@@ -13,7 +13,7 @@
   "packageManager": "npm@11.9.0",
   "scripts": {
     "dev": "npm run build && concurrently --kill-others -n api,worker,web,api-ts,worker-ts \"npm run dev -w @zhiheng/api\" \"npm run dev -w @zhiheng/worker\" \"npm run dev -w @zhiheng/web\" \"npm run watch -w @zhiheng/api\" \"npm run watch -w @zhiheng/worker\"",
-    "build:packages": "npm run build -w @zhiheng/contracts && npm run build -w @zhiheng/config",
+    "build:packages": "npm run build -w @zhiheng/contracts && npm run build -w @zhiheng/config && npm run build -w @zhiheng/resources",
     "build": "npm run build:packages && npm run build --workspaces --if-present --include-workspace-root=false",
     "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present",
     "test": "npm run build && node --test scripts/*.test.mjs",
@@ -21,7 +21,10 @@
     "infra:up": "docker compose up -d --wait",
     "infra:down": "docker compose down",
     "smoke:queue": "npm run smoke -w @zhiheng/worker",
-    "test:auth": "node --test scripts/auth.integration.mjs"
+    "test:auth": "node --test scripts/auth.integration.mjs",
+    "db:migrate": "npm run migrate -w @zhiheng/resources",
+    "db:seed:dev": "npm run seed:dev -w @zhiheng/resources",
+    "test:resources": "node --env-file-if-exists=.env --test scripts/resources.integration.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

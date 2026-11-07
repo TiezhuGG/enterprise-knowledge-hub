@@ -12,7 +12,7 @@ export interface IdentityContext {
   actor_id: string;
   tenant_id: string;
   membership_id: string;
-  role: 'employee';
+  role: MemberRole;
   capabilities: readonly string[];
   provider: 'development';
 }
@@ -23,3 +23,19 @@ export interface SessionInfo {
   csrf_token: string;
 }
 export interface DataResponse<T> { data: T }
+
+export type MemberRole = 'employee' | 'operator' | 'admin' | 'auditor';
+export const RESOURCE_ACTIONS = ['read', 'download', 'write', 'publish', 'delete', 'manage', 'manage_acl'] as const;
+export type ResourceAction = typeof RESOURCE_ACTIONS[number];
+export interface ResourceGrant { principal_type: 'member' | 'group'; principal_id: string; actions: ResourceAction[] }
+export interface KnowledgeBase {
+  id: string; name: string; description: string; status: 'active' | 'archived';
+  publish_policy: 'manual'; row_version: number; policy_version: number;
+  created_at: string; capabilities: ResourceAction[];
+}
+export interface KnowledgeDocument {
+  id: string; kb_id: string; title: string; status: 'draft' | 'active' | 'archived';
+  acl_mode: 'inherit' | 'restricted'; row_version: number; policy_version: number;
+  created_at: string; capabilities: ResourceAction[];
+}
+export interface ResourcePage<T> { data: T[]; page: { next_cursor: string | null; has_more: boolean } }

@@ -2,14 +2,17 @@
 
 Enterprise Knowledge Hub｜项目规划与界面设计基线｜2026-11-06
 
-**已进入编码阶段：P1-01 工程骨架与 P1-02 开发身份登录。** 现包含 React 前端、NestJS API、独立 BullMQ 开发 Worker、共享契约、配置与 CI；企业 OIDC、知识库与 RAG 业务功能尚未实现。设计稿数据为虚构示例，仓库不含真实密钥。
+**已进入编码阶段：P1-01 工程骨架、P1-02 开发身份与 P1-03 知识库权限。** 现包含 React 前端、NestJS API、独立 BullMQ 开发 Worker、共享契约、配置与 CI；企业 OIDC、上传与 RAG 业务功能尚未实现。设计稿数据为虚构示例，仓库不含真实密钥。
 
-开发启动、环境要求与验证命令见 [开发说明](docs/development.md)；登录配置与安全边界见 [身份说明](docs/p1-02-authentication.md)。
+开发启动、环境要求与验证命令见 [开发说明](docs/development.md)；登录配置与安全边界见 [身份说明](docs/p1-02-authentication.md)，知识库授权见 [资源与权限说明](docs/p1-03-resources-and-access.md)。
 
 ```sh
 cp .env.example .env
 npm ci
 npm run infra:up
+npm run build:packages
+npm run db:migrate
+npm run db:seed:dev
 npm run dev
 ```
 

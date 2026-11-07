@@ -14,6 +14,8 @@ jobs:
       - run: cp .env.example .env && docker compose config --quiet
       - run: npm run infra:up
       - run: npm run test:auth
+      - run: npm run db:migrate
+      - run: npm run test:resources
       - name: Worker queue and independent restart
         run: |
           node --env-file=.env apps/worker/dist/main.js > /tmp/worker.log 2>&1 &

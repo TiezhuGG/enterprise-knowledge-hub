@@ -1,6 +1,6 @@
 # P1-01 开发入口
 
-实现日期：2026-11-07。已扩展 P1-02 开发身份闭环，见 [身份说明](p1-02-authentication.md)；不代表 RAG 或企业上线验收完成。
+实现日期：2026-11-07。已扩展 P1-02 开发身份与 P1-03 知识库权限闭环，见 [身份说明](p1-02-authentication.md)；不代表 RAG 或企业上线验收完成。
 
 ## 环境与启动
 
@@ -12,6 +12,9 @@
 cp .env.example .env
 npm ci
 npm run infra:up
+npm run build:packages
+npm run db:migrate
+npm run db:seed:dev
 npm run dev
 ```
 
@@ -24,7 +27,7 @@ npm run dev
 | 目录 | 职责 | 当前实现 |
 |---|---|---|
 | apps/web | React + TypeScript + Vite + Ant Design | 中文起始页、真实 API 检查、超时与重试 |
-| apps/api | NestJS HTTP 进程 | 存活检查与开发认证接口，全局身份 Guard |
+| apps/api | NestJS HTTP 进程 | 存活、开发认证与知识库/文档权限接口 |
 | apps/worker | 独立 NestJS 应用上下文 + BullMQ | 仅 development-smoke 队列的 ping 任务 |
 | packages/contracts | 前后端共享的数据契约 | 存活响应、开发队列名称与输入 |
 | packages/config | 服务端配置入口 | API 与 Redis 配置校验，不导出给前端 |
@@ -44,7 +47,7 @@ Worker 可启动多个进程消费同一开发队列。生产并发、幂等与�
 
 ## 本地与测试存储
 
-Compose 提供 PostgreSQL **17.6** 和 Redis **7.4.6**，固定版本镜像、持久卷、健康检查，仅绑定回环地址。数据库是未来业务真相源；当前尚无业务表或迁移；开发会话由 Redis 保存。Redis 启用 AOF，仍不作为唯一业务记录。测试使用独立 Compose 项目和端口，避免覆盖开发数据。
+Compose 提供 PostgreSQL **17.6** 和 Redis **7.4.6**，固定版本镜像、持久卷、健康检查，仅绑定回环地址。数据库是未来业务真相源；资源迁移已建立成员、知识库、文档归属与 ACL；开发会话由 Redis 保存。Redis 启用 AOF，仍不作为唯一业务记录。测试使用独立 Compose 项目和端口，避免覆盖开发数据。
 
 S3 接口配置样例已保留；P1-04 选择组织批准的 S3 服务或本地兼容实现后接入，不默认引入未经许可确认的对象存储。Milvus 在 P1-08 接入，Neo4j 在 P3 接入；本任务不拉起所有未来服务。无需模型密钥即可启动骨架。
 
@@ -66,6 +69,8 @@ npm run smoke:queue
 `check` 包括全工作区类型检查、构建、配置反例与真实 API 启动/关闭/同端口重启测试。队列 smoke 要求 Redis 和独立 Worker 已启动，校验随机 nonce 的实际往返，超时返回失败。CI 安装锁定依赖，执行 check，启动 Compose，再验证 Worker 消费和重启后的队列消费。
 
 常见故障：Web 状态失败时先直接访问存活端点；端口冲突修改 `.env`；Worker 无 ready 日志时检查 `docker compose ps` 与 Redis 配置；Docker 不可用时先恢复 Docker，API 与 Web 可单独开发。日志不输出连接串、密码或任务正文。
+
+知识库与角色配置见 [资源与权限说明](p1-03-resources-and-access.md)。
 
 ## 尚待业务确认
 

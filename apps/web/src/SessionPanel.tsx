@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Card, Form, Input, Space, Typography } from 'antd';
+import { Alert, Button, Card, Form, Input, Select, Space, Typography } from 'antd';
 import type { DataResponse, SessionInfo } from '@zhiheng/contracts';
 
-export function SessionPanel() {
+export function SessionPanel({ onChange }: { onChange: (session: SessionInfo | null) => void }) {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
-  const [form] = Form.useForm<{ secret: string }>();
+  const [form] = Form.useForm<{ secret: string; account: string }>();
   async function refresh() {
     setBusy(true); setError('');
     try {
@@ -19,6 +19,7 @@ export function SessionPanel() {
     finally { setBusy(false); }
   }
   useEffect(() => { void refresh(); }, []);
+  useEffect(() => { onChange(session); }, [session, onChange]);
   useEffect(() => {
     if (!session) return;
     const timeout = setTimeout(() => {
@@ -26,12 +27,12 @@ export function SessionPanel() {
     }, Math.max(0, Date.parse(session.expires_at) - Date.now()));
     return () => clearTimeout(timeout);
   }, [session]);
-  async function login({ secret }: { secret: string }) {
+  async function login({ secret, account }: { secret: string; account: string }) {
     setBusy(true); setError('');
     try {
       const response = await fetch('/api/v1/auth/dev-login', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account: 'employee', secret }), signal: AbortSignal.timeout(5000),
+        body: JSON.stringify({ account, secret }), signal: AbortSignal.timeout(5000),
       });
       if (!response.ok) {
         throw new Error(response.status === 404 ? '开发登录未启用，请联系环境维护者。' : response.status === 429 ? '尝试次数过多，请稍后再试。' : response.status === 401 ? '开发访问口令无效。' : '暂时无法登录，请稍后重试。');
@@ -59,9 +60,12 @@ export function SessionPanel() {
       {error && <Alert role="alert" type="error" showIcon message={error} />}
       {session ? <>
         <Typography.Text>已登录：{session.display_name}</Typography.Text>
-        <Typography.Text type="secondary">员工 · 当前工作空间已由服务端绑定</Typography.Text>
+        <Typography.Text type="secondary">{({ employee: '员工', operator: '知识运营', admin: '工作空间管理员', auditor: '审计员' })[session.identity.role]} · 当前工作空间已由服务端绑定</Typography.Text>
         <Button loading={busy} onClick={() => void logout()}>退出登录</Button>
-      </> : <Form form={form} layout="vertical" onFinish={login} style={{ width: '100%' }}>
+      </> : <Form form={form} initialValues={{ account: 'employee' }} layout="vertical" onFinish={login} style={{ width: '100%' }}>
+        <Form.Item label="开发测试身份" name="account">
+          <Select options={[{ value: 'employee', label: '普通员工' }, { value: 'operator', label: '知识运营' }, { value: 'admin', label: '工作空间管理员' }, { value: 'other', label: '其他组织员工' }]} />
+        </Form.Item>
         <Form.Item label="开发访问口令" name="secret" rules={[{ required: true, message: '请输入开发访问口令' }]}>
           <Input.Password autoComplete="off" maxLength={1024} placeholder="输入环境维护者配置的访问口令" />
         </Form.Item>

@@ -25,7 +25,7 @@ async function start(extra = {}) {
   const child = spawn(process.execPath, ['apps/api/dist/main.js'], { env: {
     ...process.env, API_PORT: String(port), API_HOST: '127.0.0.1', NODE_ENV: 'test',
     DEV_AUTH_ENABLED: 'true', DEV_AUTH_SECRET: secret, AUTH_ORIGIN: origin,
-    AUTH_REDIS_PREFIX: prefix, SESSION_TTL_SECONDS: '3600', DEV_DISABLED_ACCOUNTS: '', ...extra,
+    DATABASE_URL: '', AUTH_REDIS_PREFIX: prefix, SESSION_TTL_SECONDS: '3600', DEV_DISABLED_ACCOUNTS: '', ...extra,
   }, stdio: 'pipe' });
   child.stdout.on('data', data => { logs += data; });
   child.stderr.on('data', data => { logs += data; });

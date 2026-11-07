@@ -2,6 +2,8 @@ import type { IdentityContext } from '@zhiheng/contracts';
 
 // Isolated fixtures, never production identities. Client fields cannot change these bindings.
 const accounts = {
+  operator: { actor_id: '10000000-0000-4000-8000-000000000003', tenant_id: '20000000-0000-4000-8000-000000000001', membership_id: '30000000-0000-4000-8000-000000000003', display_name: '开发知识运营' },
+  admin: { actor_id: '10000000-0000-4000-8000-000000000004', tenant_id: '20000000-0000-4000-8000-000000000001', membership_id: '30000000-0000-4000-8000-000000000004', display_name: '开发管理员' },
   employee: { actor_id: '10000000-0000-4000-8000-000000000001', tenant_id: '20000000-0000-4000-8000-000000000001', membership_id: '30000000-0000-4000-8000-000000000001', display_name: '开发员工' },
   other: { actor_id: '10000000-0000-4000-8000-000000000002', tenant_id: '20000000-0000-4000-8000-000000000002', membership_id: '30000000-0000-4000-8000-000000000002', display_name: '隔离测试员工' },
 };
