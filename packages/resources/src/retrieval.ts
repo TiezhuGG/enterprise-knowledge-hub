@@ -1,4 +1,4 @@
-import {createHmac,timingSafeEqual,randomUUID} from 'node:crypto';
+import {createHmac,createHash,timingSafeEqual,randomUUID} from 'node:crypto';
 import type {PoolClient} from 'pg';
 import type {IdentityContext,SearchInput,SearchResponse,SearchEvidence,KnowledgeChunk} from '@zhiheng/contracts';
 import {IndexingStore} from './indexing';import {kbCaps,docCaps} from './store';import {ROLE_ACTIONS,ResourceError,fail} from './policy';import {embeddingProfile,embedQuery,IndexFailure} from './embedding';import {DenseIndex} from './dense-index';
@@ -47,6 +47,18 @@ export class RetrievalStore extends IndexingStore {
   return this.run(current,async(client,member)=>{const data:SearchEvidence[]=[],sections:string[]=[],seen=new Set<string>();let used=0,budgetSkipped=false;
    for(const candidate of candidates){if(signal?.aborted)fail(408,'SEARCH_CANCELLED');if(data.length>=input.top_k)break;if(seen.has(candidate.chunk.retrieval_sha256))continue;try{const permit=await this.published(client,member,candidate.target);const receipt=await client.query('SELECT 1 FROM index_receipt WHERE tenant_id=$1 AND generation_id=$2 AND chunk_id=$3 AND retrieval_sha256=$4 FOR SHARE',[member.tenant_id,candidate.target.generation_id,candidate.chunk.id,candidate.chunk.retrieval_sha256]);if(!receipt.rowCount)continue;const section=JSON.stringify({id:`E${data.length+1}`,title:permit.row.title,version_no:permit.row.version_no,heading_path:candidate.chunk.heading_path,excerpt:candidate.chunk.text}),cost=section.length+(sections.length?1:0);if(used+cost>input.max_characters){budgetSkipped=true;continue}const target={...candidate.target,title:permit.row.title};data.push(this.evidence(member,target,candidate.chunk,permit.row.version_no,permit.download,data.length+1,candidate.score));seen.add(candidate.chunk.retrieval_sha256);sections.push(section);used+=cost}catch(error){if(error instanceof ResourceError&&error.status===404)continue;throw error}}
    return {data,context:sections.join('\n'),meta:{search_id:searchId,mode:'dense',degraded:false,candidate_limit:160,returned:data.length,context_characters:used,max_characters:input.max_characters,reason:data.length?'ok':budgetSkipped?'context_budget_exhausted':'no_matching_evidence'}};
+  });
+ }
+ /** Internal gate for server-produced evidence only; never accepts a client context. */
+ protected withEvidence<T>(current:IdentityContext,evidence:SearchEvidence[],action:(fresh:SearchEvidence[])=>T):Promise<T>{
+  return this.run(current,async(client,member)=>{const fresh:SearchEvidence[]=[];
+   // A single transaction retains all source locks until the dispatch/assembly boundary.
+   for(const item of [...evidence].sort((a,b)=>a.document_id.localeCompare(b.document_id)||a.chunk_id.localeCompare(b.chunk_id))){
+    const parsed=this.token(member,item.citation_id);if(parsed.target.document_id!==item.document_id||parsed.target.version_id!==item.version_id||parsed.target.generation_id!==item.generation_id||parsed.chunk!==item.chunk_id)fail(404,'RESOURCE_UNAVAILABLE');
+    const permit=await this.published(client,member,parsed.target),receipt=await client.query('SELECT 1 FROM index_receipt r JOIN knowledge_chunk c ON c.tenant_id=r.tenant_id AND c.id=r.chunk_id AND c.retrieval_sha256=r.retrieval_sha256 WHERE r.tenant_id=$1 AND r.generation_id=$2 AND r.chunk_id=$3 AND c.version_id=$4 AND c.text_sha256=$5 AND c.parser_version=$6 AND c.chunker_version=$7 FOR SHARE OF r,c',[member.tenant_id,item.generation_id,item.chunk_id,item.version_id,createHash('sha256').update(item.snippet).digest('hex'),permit.row.parser_version,permit.row.chunker_version]);if(!receipt.rowCount)fail(404,'RESOURCE_UNAVAILABLE');
+    fresh.push({...item,title:permit.row.title,version_no:permit.row.version_no,citation_id:this.sign(member,{...parsed.target,title:permit.row.title},item.chunk_id),download_url:permit.download?`/api/v1/documents/${item.document_id}/versions/${item.version_id}/content`:null});
+   }
+   return action(evidence.map(item=>fresh.find(f=>f.evidence_id===item.evidence_id)!));
   });
  }
  async readCitation(current:IdentityContext,token:string):Promise<SearchEvidence>{

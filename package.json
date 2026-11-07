@@ -36,7 +36,8 @@
     "test:indexing": "node --env-file-if-exists=.env --test scripts/indexing.integration.mjs",
     "validate:embedding": "node --env-file-if-exists=.env scripts/validate-local-embedding.mjs",
     "test:retrieval": "node --env-file-if-exists=.env --test scripts/retrieval.integration.mjs",
-    "index:warm": "node --env-file-if-exists=.env scripts/warm-index.mjs"
+    "index:warm": "node --env-file-if-exists=.env scripts/warm-index.mjs",
+    "test:answers": "node --env-file-if-exists=.env --test scripts/answers.integration.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

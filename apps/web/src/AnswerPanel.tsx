@@ -1,0 +1,16 @@
+import {useEffect,useRef,useState} from 'react';import {Alert,Button,Card,Input,Space,Tag,Typography} from 'antd';
+import type {AnswerResponse,SearchEvidence,SessionInfo} from '@zhiheng/contracts';
+export function AnswerPanel({session,onExpired}:{session:SessionInfo;onExpired:()=>void}){
+ const [question,setQuestion]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[answer,setAnswer]=useState<AnswerResponse|null>(null),[source,setSource]=useState<SearchEvidence|null>(null),active=useRef<AbortController|null>(null);
+ useEffect(()=>()=>active.current?.abort(),[]);
+ async function ask(){const abort=new AbortController();active.current=abort;setBusy(true);setAnswer(null);setSource(null);setError('');try{
+  const r=await fetch('/api/v1/answers',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrf_token},body:JSON.stringify({query:question}),signal:AbortSignal.any([abort.signal,AbortSignal.timeout(100000)])});
+  if(!r.ok){if(r.status===401)onExpired();throw new Error(r.status===429?'当前已有问答请求，请等待完成。':r.status===503?'检索或模型服务尚未就绪。':'本次问答未完成，请稍后重试。')}
+  if(!abort.signal.aborted)setAnswer((await r.json()).data);
+ }catch(e){if(!abort.signal.aborted)setError(e instanceof Error?e.message:'问答失败。')}finally{if(active.current===abort){active.current=null;setBusy(false)}}}
+ async function verify(e:SearchEvidence){setBusy(true);setSource(null);setError('');try{const r=await fetch(`/api/v1/citations/${encodeURIComponent(e.citation_id)}`,{signal:AbortSignal.timeout(12000)});if(!r.ok){if(r.status===401)onExpired();setAnswer(null);throw new Error('来源已变化、引用过期或权限不足，请重新提问。')}setSource((await r.json()).data)}catch(e){setError(e instanceof Error?e.message:'来源核验失败。')}finally{setBusy(false)}}
+ return <Card title="带引用的基线问答"><Space direction="vertical" size="middle" style={{width:'100%'}}><Typography.Text type="secondary">从当前可读的已发布资料中选择原文摘录。无法确认时拒答；摘录仍需结合完整条款核对。</Typography.Text><Input.TextArea aria-label="问答问题" rows={3} maxLength={1200} value={question} disabled={busy} onChange={e=>{setQuestion(e.target.value);setAnswer(null);setSource(null)}} placeholder="向企业资料提问"/><Space><Button type="primary" loading={busy} disabled={!question.trim()} onClick={()=>void ask()}>提问并核验引用</Button></Space>
+ {error&&<Alert role="alert" type="error" showIcon message={error}/>}{answer&&<><Alert role="status" type={answer.status==='answered'?'success':answer.status==='failed'?'error':'warning'} showIcon message={answer.message}/>{answer.claims.map((c,i)=>{const e=answer.sources.find(s=>s.evidence_id===c.evidence_id)!;return <Card key={`${c.evidence_id}:${i}`} size="small" title={<Space wrap><Tag>{c.evidence_id}</Tag><span>{e.title} · v{e.version_no}</span></Space>}><blockquote className="parsed-text">{c.quote}</blockquote><Typography.Paragraph type="secondary">{e.heading_path.join(' / ')}</Typography.Paragraph><Button disabled={busy} onClick={()=>void verify(e)}>核验回答来源</Button></Card>})}</>}
+ {source&&<Card size="small" title="回答来源已核验"><Typography.Paragraph>{source.title} · v{source.version_no}</Typography.Paragraph><pre className="parsed-text">{source.snippet}</pre>{source.download_url&&<Button href={source.download_url}>下载确切版本原文</Button>}</Card>}
+ </Space></Card>;
+}

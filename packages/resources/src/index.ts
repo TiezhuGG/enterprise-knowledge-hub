@@ -13,3 +13,6 @@ export {embeddingProfile,embed,embedQuery,vector,IndexFailure,type EmbeddingProf
 export {DenseIndex} from './dense-index';
 
 export {RetrievalStore} from './retrieval';
+
+export {AnswerStore} from './answers';
+export {generationProfile,generate,validateClaims,GenerationFailure} from './generation';

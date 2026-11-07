@@ -116,3 +116,13 @@ export interface SearchEvidence {
 export interface SearchResponse {
  data:SearchEvidence[];context:string;meta:{search_id:string;mode:'dense';degraded:false;candidate_limit:number;returned:number;context_characters:number;max_characters:number;reason:'ok'|'no_visible_published_documents'|'no_matching_evidence'|'context_budget_exhausted';};
 }
+
+/** P1-10 non-streaming, extractive baseline. No model prose is returned. */
+export interface AnswerClaim {evidence_id:string;quote:string;start:number;end:number}
+export interface AnswerResponse {
+ answer_id:string;status:'answered'|'conflict'|'refused'|'failed';message:string;
+ reason:'verified_quotes'|'conflicting_evidence'|'insufficient_evidence'|'invalid_model_output'|'generation_unavailable'|'generation_timeout'|'sources_changed';
+ claims:AnswerClaim[];sources:SearchEvidence[];
+ model:{name:string;revision:string;prompt_version:'extractive-v1'}|null;
+ usage:{prompt_tokens:number|null;completion_tokens:number|null};
+}

@@ -1,3 +1,4 @@
+import {AnswerPanel} from './AnswerPanel';
 import {SearchPanel} from './SearchPanel';
 import { useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -31,12 +32,13 @@ function App() {
   }, [attempt]);
   return <ConfigProvider locale={zhCN} theme={{ token: { colorPrimary: '#236c5b', borderRadius: 12 } }}>
     <main>
-      <header><strong>知衡</strong><span>企业知识中枢</span><Tag>开发环境 · P1-09</Tag></header>
+      <header><strong>知衡</strong><span>企业知识中枢</span><Tag>开发环境 · P1-10</Tag></header>
       <section>
         <Typography.Text className="eyebrow">从可信的知识开始</Typography.Text>
         <Typography.Title>让每一次回答，都有据可循。</Typography.Title>
         <Typography.Paragraph>登录当前工作空间，逐步连接可信的知识与带引用的问答。</Typography.Paragraph>
         <SessionPanel key={authEpoch} onChange={setSession} />
+        {session && <AnswerPanel key={`answer:${session.identity.actor_id}:${session.identity.tenant_id}:${session.identity.membership_id}:${session.identity.role}`} session={session} onExpired={onExpired}/> }
         {session && <SearchPanel key={`search:${session.identity.actor_id}:${session.identity.tenant_id}:${session.identity.membership_id}:${session.identity.role}`} session={session} onExpired={onExpired}/> }
         {session && <KnowledgePanel key={`${session.identity.actor_id}:${session.identity.tenant_id}:${session.identity.membership_id}:${session.identity.role}`} session={session} onExpired={onExpired} />}
         <Card title="开发服务状态">
@@ -47,7 +49,7 @@ function App() {
             <Button onClick={() => setAttempt(value => value + 1)} loading={status === 'loading'}>重新检查</Button>
           </Space>
         </Card>
-        <p className="note">当前支持文档解析、分块与向量索引接入；已接入授权检索；真实中文模型验收待网络配置生效，问答将在后续任务实现。</p>
+        <p className="note">当前支持文档解析、分块与向量索引接入；已接入授权检索、原文摘录问答与引用校验；真实模型质量验收待本地模型服务就绪。</p>
       </section>
     </main>
   </ConfigProvider>;
