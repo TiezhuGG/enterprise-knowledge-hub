@@ -83,3 +83,5 @@ P1-06 完整链路测试：`npm run test:parsing`；需要 PostgreSQL、Redis �
 P1-07 完整链路：`npm run test:chunking`；策略样本对比：`npm run compare:chunks`。
 
 P1-08 索引接入与本地CPU模型配置见 [索引说明](p1-08-embedding-and-index.md)。测试：`npm run test:indexing`（需 requirements-dev-index.txt）；真实模型验收：`npm run validate:embedding -- --write`（需实际模型就绪）。
+
+P1-09 授权检索与引用复核见 [检索说明](p1-09-authorized-retrieval.md)。`npm run test:retrieval`使用与索引测试相同Python运行环境；`npm run index:warm`为维护者预热当前配置空间，不调用模型。

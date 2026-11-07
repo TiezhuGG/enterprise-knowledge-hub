@@ -36,6 +36,7 @@ jobs:
       - run: npm run test:chunking
       - run: python -m pip install -r requirements-dev-index.txt
       - run: npm run test:indexing
+      - run: npm run test:retrieval
       - name: Worker queue and independent restart
         run: |
           node --env-file=.env apps/worker/dist/main.js > /tmp/worker.log 2>&1 &

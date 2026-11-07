@@ -11,3 +11,5 @@ export {ChunkingStore} from './chunking';
 export {IndexingStore} from './indexing';
 export {embeddingProfile,embed,embedQuery,vector,IndexFailure,type EmbeddingProfile} from './embedding';
 export {DenseIndex} from './dense-index';
+
+export {RetrievalStore} from './retrieval';

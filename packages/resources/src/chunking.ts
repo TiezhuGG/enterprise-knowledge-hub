@@ -36,8 +36,8 @@ export class ChunkingStore extends ParsingStore {
    await client.query("INSERT INTO ingestion_checkpoint(tenant_id,job_id,step,input_sha256,processor_version) VALUES($1,$2,'chunk_structure',$3,$4) ON CONFLICT DO NOTHING",[row.tenant_id,row.id,input.scope.parsed_artifact_sha256,CHUNKER_VERSION]);if(continueIndexing){await this.change(client,row,{status:'running',stage:'indexing',error_code:null});return true}await this.endAttempt(client,row,'completed',null);await this.change(client,row,{status:'waiting_dependency',stage:'awaiting_indexer',error_code:'INDEXER_NOT_CONFIGURED',dead_letter:false});return true;
   });
  }
- protected async readChunks(row:any):Promise<ChunkSet>{
-  const bytes=await this.objects.read(row.object_key,row.object_version,row.artifact_size);if(sha256(bytes)!==row.artifact_sha256)fail(422,'CHUNK_ARTIFACT_MISMATCH');let result:ChunkSet;try{result=JSON.parse(bytes.toString('utf8'))}catch{fail(422,'CHUNK_ARTIFACT_MISMATCH')}
+ protected async readChunks(row:any,signal?:AbortSignal):Promise<ChunkSet>{
+  const bytes=await this.objects.read(row.object_key,row.object_version,row.artifact_size,signal);if(sha256(bytes)!==row.artifact_sha256)fail(422,'CHUNK_ARTIFACT_MISMATCH');let result:ChunkSet;try{result=JSON.parse(bytes.toString('utf8'))}catch{fail(422,'CHUNK_ARTIFACT_MISMATCH')}
   if(result.chunker_version!==CHUNKER_VERSION||result.scope?.version_id!==row.version_id||result.scope?.document_id!==row.document_id||result.scope?.tenant_id!==row.tenant_id||result.scope?.source_sha256!==row.source_sha256||result.scope?.parsed_artifact_sha256!==row.parsed_artifact_sha256||!Array.isArray(result.chunks)||result.chunks.length!==row.chunk_count)fail(422,'CHUNK_ARTIFACT_MISMATCH');return result;
  }
  listChunks(current:IdentityContext,doc:string,versionId:string,input:{limit:number;cursor?:string}):Promise<ChunkPreview>{return this.run(current,async(client,member)=>{

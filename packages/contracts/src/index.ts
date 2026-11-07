@@ -107,3 +107,12 @@ export interface DenseGenerationView {
  status:'building'|'ready'|'failed'|'cancelled';chunk_count:number;indexed_count:number;cache_hits:number;provider_inputs:number;tokens:string|null;
  required_artifacts:['dense'];created_at:string;ready_at:string|null;
 }
+
+export interface SearchInput {query:string;kb_ids?:string[];top_k:number;mode:'dense';min_score:number;max_characters:number}
+export interface SearchEvidence {
+ evidence_id:string|null;document_id:string;version_id:string;version_no:number;generation_id:string;chunk_id:string;title:string;snippet:string;
+ heading_path:string[];spans:ChunkSpan[];rank:number|null;score:number|null;citation_id:string;download_url:string|null;
+}
+export interface SearchResponse {
+ data:SearchEvidence[];context:string;meta:{search_id:string;mode:'dense';degraded:false;candidate_limit:number;returned:number;context_characters:number;max_characters:number;reason:'ok'|'no_visible_published_documents'|'no_matching_evidence'|'context_budget_exhausted';};
+}

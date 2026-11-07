@@ -2,9 +2,9 @@
 
 Enterprise Knowledge Hub｜项目规划与界面设计基线｜2026-11-06
 
-**已完成 P1-07；P1-08 嵌入与索引接入代码已实现，真实本地中文模型验收待网络配置生效。** 现包含 React 前端、NestJS API、独立 BullMQ 开发 Worker、共享契约、配置与 CI；已支持 TXT、Markdown、文本型 PDF、DOCX 结构解析、分块与来源预览、任务恢复与取消；已提供Milvus稠密索引接入；企业 OIDC、授权语义检索与 RAG 尚未实现。设计稿数据为虚构示例，仓库不含真实密钥。
+**P1-08 索引接入与 P1-09 授权检索代码已实现，真实本地中文模型与检索效果仍待网络配置生效后验收。** 现包含 React 前端、NestJS API、独立 BullMQ 开发 Worker、共享契约、配置与 CI；已支持 TXT、Markdown、文本型 PDF、DOCX 结构解析、分块与来源预览、任务恢复与取消；已提供Milvus稠密索引接入；已接入授权检索与证据复核；企业 OIDC、生成式回答与发布流程尚未实现。设计稿数据为虚构示例，仓库不含真实密钥。
 
-开发启动、环境要求与验证命令见 [开发说明](docs/development.md)；登录配置与安全边界见 [身份说明](docs/p1-02-authentication.md)，知识库授权见 [资源与权限说明](docs/p1-03-resources-and-access.md)，上传及对象存储见 [上传与版本说明](docs/p1-04-uploads-and-versions.md)，任务运行见 [处理任务说明](docs/p1-05-ingestion-jobs.md)，格式与质量边界见 [解析说明](docs/p1-06-document-parsing.md)，分块规范见 [分块与溯源说明](docs/p1-07-chunking-and-provenance.md)，索引配置与验收范围见 [嵌入与索引说明](docs/p1-08-embedding-and-index.md)。
+开发启动、环境要求与验证命令见 [开发说明](docs/development.md)；登录配置与安全边界见 [身份说明](docs/p1-02-authentication.md)，知识库授权见 [资源与权限说明](docs/p1-03-resources-and-access.md)，上传及对象存储见 [上传与版本说明](docs/p1-04-uploads-and-versions.md)，任务运行见 [处理任务说明](docs/p1-05-ingestion-jobs.md)，格式与质量边界见 [解析说明](docs/p1-06-document-parsing.md)，分块规范见 [分块与溯源说明](docs/p1-07-chunking-and-provenance.md)，索引配置与验收范围见 [嵌入与索引说明](docs/p1-08-embedding-and-index.md)，授权门禁见 [检索说明](docs/p1-09-authorized-retrieval.md)。
 
 ```sh
 cp .env.example .env
