@@ -7,3 +7,4 @@ export * from './upload-validation';
 export * from './job-contract';
 export * from './ingestion';
 export * from './parsing';
+export {ChunkingStore} from './chunking';

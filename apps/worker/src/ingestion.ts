@@ -1,15 +1,16 @@
+import { ChunkFailure } from '@zhiheng/chunker';
 import { randomUUID } from 'node:crypto';
 import { Queue, Worker, type Job } from 'bullmq';
 import { parseIsolated,parserLimits,PARSER_VERSION,ParserFailure } from '@zhiheng/parser';
 import { redisConfig } from '@zhiheng/config';
 import { INGEST_JOB_NAME, type IngestionDelivery } from '@zhiheng/contracts';
-import { ParsingStore, S3Objects, ingestionConfig, uploadLimits, sha256, ResourceError, type AttemptLease } from '@zhiheng/resources';
+import { ChunkingStore, S3Objects, ingestionConfig, uploadLimits, sha256, ResourceError, type AttemptLease } from '@zhiheng/resources';
 
 export class IngestionRuntime {
   private readonly config=ingestionConfig();
   private readonly limits=parserLimits();
   private readonly objects=new S3Objects(process.env.S3_BUCKET??'');
-  private readonly store=new ParsingStore(process.env.DATABASE_URL,process.env.DATABASE_SCHEMA,process.env.RESOURCE_CURSOR_SECRET,this.objects,uploadLimits(),this.config);
+  private readonly store=new ChunkingStore(process.env.DATABASE_URL,process.env.DATABASE_SCHEMA,process.env.RESOURCE_CURSOR_SECRET,this.objects,uploadLimits(),this.config);
   private readonly workerId=randomUUID();
   private queue?:Queue<IngestionDelivery>;
   private worker?:Worker<IngestionDelivery>;
@@ -33,6 +34,7 @@ export class IngestionRuntime {
     try{
       await this.store.recoverExpired();
       if(this.config.parserEnabled)await this.store.resumeWaitingParsers();
+      if(this.config.chunkerEnabled)await this.store.resumeWaitingChunkers();
       for(const delivery of await this.store.reserveDeliveries()){
         if(this.stopping){await this.store.releaseDelivery(delivery);continue}
         try{await this.queue!.add(INGEST_JOB_NAME,delivery,{jobId:`ingest-${delivery.job_id}-${delivery.revision}`,attempts:1,removeOnComplete:true,removeOnFail:100});await this.store.acknowledgeDelivery(delivery)}
@@ -52,6 +54,8 @@ export class IngestionRuntime {
     },Math.max(200,Math.floor(this.config.leaseMs/3)));
     const deadline=setTimeout(()=>controller.abort(),this.config.deadlineMs);
     try{
+      const prior=await this.store.resumeParsed(lease,this.config.chunkerEnabled);
+      if(prior==='closed')return;if(prior==='ready'){await this.store.chunkLease(lease,controller.signal);return}
       let digest=lease.source.sha256,bytes:Buffer|undefined;
       if(!lease.checkpoint){bytes=await this.objects.read(lease.source.key,lease.source.version,lease.source.size,controller.signal);digest=sha256(bytes);if(bytes.length!==lease.source.size||digest!==lease.source.sha256){await this.store.failAttempt(lease,'SOURCE_INTEGRITY_MISMATCH',false);return}}
       if(controller.signal.aborted){await this.fail(lease,'WORKER_ERROR');return}
@@ -62,8 +66,9 @@ export class IngestionRuntime {
       if(sha256(bytes)!==lease.source.sha256){await this.store.failAttempt(lease,'SOURCE_INTEGRITY_MISMATCH',false);return}
       const output=await parseIsolated(bytes,lease.source.mime==='text/plain'&&lease.source.filename.toLowerCase().endsWith('.md')?'text/markdown':lease.source.mime,controller.signal,this.limits);
       if(controller.signal.aborted){await this.fail(lease,'WORKER_ERROR');return}
-      await this.store.completeParsing(lease,output);
-    }catch(error){if(error instanceof ParserFailure&&error.code!=='PARSER_CANCELLED'){await this.store.failAttempt(lease,error.code,false)}else if(error instanceof ResourceError&&error.status===422){await this.store.failAttempt(lease,error.code.startsWith('PARSE')?error.code:'SOURCE_INTEGRITY_MISMATCH',false)}else await this.fail(lease,this.stopping||controller.signal.aborted?'WORKER_ERROR':'SOURCE_UNAVAILABLE')}
+      const saved=await this.store.completeParsing(lease,output,this.config.chunkerEnabled);
+      if(saved&&this.config.chunkerEnabled)await this.store.chunkLease(lease,controller.signal);
+    }catch(error){if(error instanceof ChunkFailure&&error.code!=='CHUNK_CANCELLED'){await this.store.failAttempt(lease,error.code,false)}else if(error instanceof ParserFailure&&error.code!=='PARSER_CANCELLED'){await this.store.failAttempt(lease,error.code,false)}else if(error instanceof ResourceError&&error.status===422){await this.store.failAttempt(lease,error.code.startsWith('PARSE')||error.code.startsWith('CHUNK')?error.code:'SOURCE_INTEGRITY_MISMATCH',false)}else await this.fail(lease,this.stopping||controller.signal.aborted?'WORKER_ERROR':'SOURCE_UNAVAILABLE')}
     finally{clearInterval(pulse);clearTimeout(deadline);this.active.delete(controller)}
   }
   private async fail(lease:AttemptLease,code:'SOURCE_UNAVAILABLE'|'WORKER_DEADLINE'|'WORKER_ERROR'){

@@ -78,3 +78,26 @@ export interface ParsedDocument {
 export interface ParsedPreview {document_id:string;version_id:string;result:ParsedDocument;page:{next_cursor:string|null;has_more:boolean};total_blocks:number}
 
 export const STRUCTURE_PARSER_VERSION='structure-v1';
+
+export const CHUNKER_VERSION='structure-chunks-v1';
+export interface ChunkScope {
+ tenant_id:string;kb_id:string;document_id:string;version_id:string;version_no:number;source_asset_id:string;
+ source_sha256:string;parser_version:string;parsed_artifact_sha256:string;
+}
+export interface ChunkSpan {
+ block_id:string;block_ordinal:number;start:number;end:number;source:SourceLocation;
+ role:'body'|'table_header';row_start?:number;row_end?:number;
+}
+export interface KnowledgeChunk {
+ id:string;ordinal:number;kind:'text'|'table'|'code';text:string;retrieval_text:string;text_sha256:string;retrieval_sha256:string;
+ heading_path:string[];spans:ChunkSpan[];overlap_characters:number;
+ table?:{header_rows:number;rows:ParsedCell[][];row_start:number;row_end:number};
+ provenance:ChunkScope;permission_source:{type:'current_document_acl';tenant_id:string;kb_id:string;document_id:string};
+}
+export interface ChunkSet {
+ chunker_version:string;scope:ChunkScope;
+ policy:{strategy:'structure-v1'|'fixed-window-v1';max_characters:number;overlap_characters:number;heading_context_characters:number;offset_unit:'utf16'};
+ chunks:KnowledgeChunk[];warnings:Array<{code:string;block_id?:string}>;source_warnings:ParseWarning[];
+ metrics:{chunks:number;exact_duplicate_chunks:number;duplicate_ratio:number;overlap_characters:number;repeated_table_header_characters:number;retrieval_characters:number;max_chunk_characters:number;excluded_header_footer_blocks:number};
+}
+export interface ChunkPreview {document_id:string;version_id:string;result:ChunkSet;total_chunks:number;page:{next_cursor:string|null;has_more:boolean}}
