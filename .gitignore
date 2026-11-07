@@ -10,3 +10,5 @@ Thumbs.db
 __pycache__/
 *.pyc
 work/
+
+.venv-storage/

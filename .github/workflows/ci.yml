@@ -16,6 +16,19 @@ jobs:
       - run: npm run test:auth
       - run: npm run db:migrate
       - run: npm run test:resources
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-dev-storage.txt
+      - run: python -m pip install -r requirements-dev-storage.txt
+      - name: Start development S3 protocol service
+        run: |
+          moto_server -H 127.0.0.1 -p 9000 > /tmp/s3.log 2>&1 &
+          echo "$!" > /tmp/s3.pid
+          curl --retry 15 --retry-connrefused --retry-delay 1 --max-time 30 -fsS http://127.0.0.1:9000/ > /dev/null
+      - run: npm run storage:init
+      - run: npm run test:uploads
       - name: Worker queue and independent restart
         run: |
           node --env-file=.env apps/worker/dist/main.js > /tmp/worker.log 2>&1 &
@@ -28,4 +41,6 @@ jobs:
           worker_pid=$!
           npm run smoke:queue
       - if: always()
-        run: docker compose down
+        run: |
+          docker compose down
+          if [ -f /tmp/s3.pid ]; then kill "$(cat /tmp/s3.pid)" 2>/dev/null || true; fi

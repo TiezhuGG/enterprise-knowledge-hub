@@ -16,18 +16,18 @@ const kbCaps = `(SELECT array_agg(DISTINCT action) FROM acl_entry a CROSS JOIN L
 const docCaps = `(SELECT array_agg(DISTINCT action) FROM acl_entry a CROSS JOIN LATERAL unnest(a.actions) action WHERE a.tenant_id=d.tenant_id AND a.document_id=d.id AND ${principal} AND action=ANY($3::text[]))`;
 
 export class ResourceStore {
-  private readonly pool;
-  constructor(url?: string, schema = 'public', private readonly cursorSecret = '') { this.pool = databasePool(url, schema); }
+  protected readonly pool;
+  constructor(url?: string, schema = 'public', protected readonly cursorSecret = '') { this.pool = databasePool(url, schema); }
   close() { return this.pool?.end(); }
   async identity(input: IdentityContext) { return transaction(this.pool, client => this.member(client, input)); }
-  private async member(client: PoolClient, input: IdentityContext): Promise<IdentityContext & { authz_version: number }> {
+  protected async member(client: PoolClient, input: IdentityContext): Promise<IdentityContext & { authz_version: number }> {
     const result = await client.query(`SELECT m.* FROM membership m JOIN tenant t ON t.id=m.tenant_id
       WHERE m.tenant_id=$1 AND m.id=$2 AND m.actor_id=$3 AND m.status='active' AND t.status='active' FOR SHARE OF m,t`, [input.tenant_id, input.membership_id, input.actor_id]);
     const row = result.rows[0]; if (!row) fail(401, 'MEMBERSHIP_INACTIVE');
     return { actor_id: row.actor_id, tenant_id: row.tenant_id, membership_id: row.id, role: row.role,
       provider: input.provider, capabilities: row.can_create_kb || row.role === 'admin' ? ['knowledge:read', 'knowledge:create'] : ['knowledge:read'], authz_version: row.authz_version };
   }
-  private async run<T>(input: IdentityContext, fn: (client: PoolClient, member: IdentityContext & { authz_version: number }) => Promise<T>) {
+  protected async run<T>(input: IdentityContext, fn: (client: PoolClient, member: IdentityContext & { authz_version: number }) => Promise<T>) {
     return transaction(this.pool, async client => fn(client, await this.member(client, input)));
   }
   private params(member: IdentityContext) { return [member.tenant_id, member.membership_id, ROLE_ACTIONS[member.role]]; }
@@ -38,7 +38,7 @@ export class ResourceStore {
       status: row.status, row_version: row.row_version, policy_version: row.policy_version,
       created_at: row.created_at.toISOString(), capabilities };
   }
-  private async kb(client: PoolClient, member: IdentityContext, id: string, action?: ResourceAction, lock = false) {
+  protected async kb(client: PoolClient, member: IdentityContext, id: string, action?: ResourceAction, lock = false) {
     const result = await client.query(`SELECT k.*, ${kbCaps} AS caps FROM knowledge_base k WHERE k.tenant_id=$1 AND k.id=$4 AND k.status<>'deleted' ${lock ? 'FOR UPDATE OF k' : 'FOR SHARE OF k'}`, [...this.params(member), id]);
     const row = result.rows[0]; if (!row) fail(404, 'RESOURCE_UNAVAILABLE');
     const view = this.kbView(row, member);
@@ -49,7 +49,7 @@ export class ResourceStore {
     if (!expected) fail(428, 'IF_MATCH_REQUIRED');
     if (expected !== actual) fail(412, 'RESOURCE_VERSION_CHANGED');
   }
-  private async audit(client: PoolClient, member: IdentityContext, id: string, action: string, requestId: string) {
+  protected async audit(client: PoolClient, member: IdentityContext, id: string, action: string, requestId: string) {
     await client.query('INSERT INTO resource_audit(id,tenant_id,actor_id,member_id,resource_id,action,request_id) VALUES($1,$2,$3,$4,$5,$6,$7)', [randomUUID(),member.tenant_id,member.actor_id,member.membership_id,id,action,requestId]);
   }
   getKnowledgeBase(member: IdentityContext, id: string) { return this.run(member, (client, current) => this.kb(client, current, id)); }
@@ -57,10 +57,10 @@ export class ResourceStore {
   authorizeKnowledgeBase(member: IdentityContext, id: string, action: ResourceAction) {
     return this.run(member, (client, current) => this.kb(client, current, id, action));
   }
-  private scope(member: IdentityContext & { authz_version: number }, input: ListInput, kind: string) {
+  protected scope(member: IdentityContext & { authz_version: number }, input: ListInput, kind: string) {
     return hash(JSON.stringify([member.tenant_id, member.membership_id, member.authz_version, member.role, kind, input.q, input.status ?? '', input.limit]));
   }
-  private cursor(input: ListInput, scope: string): [string, string] | null {
+  protected cursor(input: ListInput, scope: string): [string, string] | null {
     if (this.cursorSecret.length < 32) fail(503, 'CURSOR_SECRET_REQUIRED');
     if (!input.cursor) return null;
     try {
@@ -74,7 +74,7 @@ export class ResourceStore {
       return [data.at, data.id];
     } catch { fail(400, 'INVALID_CURSOR'); }
   }
-  private page<T extends { id: string; created_at: string }>(rows: T[], input: ListInput, scope: string): ResourcePage<T> {
+  protected page<T extends { id: string; created_at: string }>(rows: T[], input: ListInput, scope: string): ResourcePage<T> {
     const hasMore = rows.length > input.limit; const data = rows.slice(0,input.limit); const last = data.at(-1);
     let cursor: string | null = null;
     if (hasMore && last) {
@@ -166,8 +166,11 @@ export class ResourceStore {
     if(row.status!=='active' && !capabilities.some(a=>['write','publish','manage'].includes(a))) capabilities=[];
     return {id:row.id,kb_id:row.kb_id,title:row.title,status:row.status,acl_mode:row.acl_mode,row_version:row.row_version,policy_version:row.policy_version,kb_policy_version:row.kb_policy_version,created_at:row.created_at.toISOString(),capabilities};
   }
-  private async doc(client:PoolClient,current:IdentityContext,id:string,action:ResourceAction='read',lock=false) {
-    const result=await client.query(`SELECT d.*,k.status AS kb_status,k.policy_version AS kb_policy_version,${kbCaps} AS kb_caps,${docCaps} AS doc_caps FROM document d JOIN knowledge_base k ON k.tenant_id=d.tenant_id AND k.id=d.kb_id WHERE d.tenant_id=$1 AND d.id=$4 AND k.status<>'deleted' ${lock?'FOR UPDATE OF k,d':'FOR SHARE OF k,d'}`,[...this.params(current),id]);
+  protected async doc(client:PoolClient,current:IdentityContext,id:string,action:ResourceAction='read',lock=false) {
+    const location=await client.query('SELECT kb_id FROM document WHERE tenant_id=$1 AND id=$2',[current.tenant_id,id]);
+    if(!location.rows[0])fail(404,'RESOURCE_UNAVAILABLE');
+    await this.kb(client,current,location.rows[0].kb_id,undefined,lock);
+    const result=await client.query(`SELECT d.*,k.status AS kb_status,k.policy_version AS kb_policy_version,${kbCaps} AS kb_caps,${docCaps} AS doc_caps FROM document d JOIN knowledge_base k ON k.tenant_id=d.tenant_id AND k.id=d.kb_id WHERE d.tenant_id=$1 AND d.id=$4 AND k.status<>'deleted' ${lock?'FOR UPDATE OF d':'FOR SHARE OF d'}`,[...this.params(current),id]);
     const row=result.rows[0]; if(!row) fail(404,'RESOURCE_UNAVAILABLE');
     const view=this.documentView(row,current); if(!view.capabilities.includes(action)) fail(404,'RESOURCE_UNAVAILABLE'); return view;
   }

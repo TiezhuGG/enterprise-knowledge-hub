@@ -1,7 +1,23 @@
 {
-  "name": "@zhiheng/resources", "version": "0.1.0", "private": true,
-  "main": "dist/index.js", "types": "dist/index.d.ts",
-  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit", "migrate": "node --env-file-if-exists=../../.env scripts/migrate.cjs", "seed:dev": "node --env-file-if-exists=../../.env scripts/seed.cjs" },
-  "dependencies": { "@zhiheng/contracts": "0.1.0", "pg": "^8.16.3" },
-  "devDependencies": { "@types/pg": "^8.15.5" }
+  "name": "@zhiheng/resources",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "migrate": "node --env-file-if-exists=../../.env scripts/migrate.cjs",
+    "seed:dev": "node --env-file-if-exists=../../.env scripts/seed.cjs",
+    "storage:init": "node --env-file-if-exists=../../.env scripts/storage-init.cjs",
+    "uploads:cleanup": "node --env-file-if-exists=../../.env scripts/cleanup.cjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1164.0",
+    "@zhiheng/contracts": "0.1.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.5"
+  }
 }

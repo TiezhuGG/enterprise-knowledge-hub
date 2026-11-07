@@ -30,7 +30,7 @@ function App() {
   }, [attempt]);
   return <ConfigProvider locale={zhCN} theme={{ token: { colorPrimary: '#236c5b', borderRadius: 12 } }}>
     <main>
-      <header><strong>知衡</strong><span>企业知识中枢</span><Tag>开发环境 · P1-03</Tag></header>
+      <header><strong>知衡</strong><span>企业知识中枢</span><Tag>开发环境 · P1-04</Tag></header>
       <section>
         <Typography.Text className="eyebrow">从可信的知识开始</Typography.Text>
         <Typography.Title>让每一次回答，都有据可循。</Typography.Title>
@@ -45,7 +45,7 @@ function App() {
             <Button onClick={() => setAttempt(value => value + 1)} loading={status === 'loading'}>重新检查</Button>
           </Space>
         </Card>
-        <p className="note">当前支持开发身份与知识库权限管理；上传、索引与问答将在后续任务实现。</p>
+        <p className="note">当前支持受控上传与文档版本；解析、索引和问答将在后续任务实现。</p>
       </section>
     </main>
   </ConfigProvider>;

@@ -12,3 +12,9 @@ section { max-width: 720px; padding: 80px 0; }
   .knowledge-list .ant-list-item { flex-direction: column; align-items: stretch; gap: 12px; }
   .knowledge-list .ant-list-item-action { margin-inline-start: 0; align-self: flex-start; }
 }
+@media (max-width: 600px) {
+  .knowledge-list.ant-list .ant-list-item { justify-content: flex-start; }
+  .knowledge-list.ant-list .ant-list-item > .ant-list-item-meta { flex: 0 0 auto; width: 100%; }
+  .knowledge-list.ant-list .ant-list-item > .ant-list-item-meta > .ant-list-item-meta-content { flex: 0 1 auto; width: 100%; }
+  .knowledge-list.ant-list .ant-list-item > .ant-list-item-action { margin-inline-start: 0; }
+}

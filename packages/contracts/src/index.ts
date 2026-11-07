@@ -39,3 +39,10 @@ export interface KnowledgeDocument {
   created_at: string; capabilities: ResourceAction[];
 }
 export interface ResourcePage<T> { data: T[]; page: { next_cursor: string | null; has_more: boolean } }
+
+export interface UploadTicket {
+  ticket_id:string; document_id:string; status:'open'|'uploaded'|'finalized'; expires_at:string; max_size:number;
+  upload:{method:'PUT';url:string;headers:Record<string,string>}; finalize_url:string;
+}
+export interface FinalizedUpload {document_id:string;version_id:string;version_no:number;status:'awaiting_processing';status_url:string}
+export interface DocumentVersion {id:string;document_id:string;version_no:number;filename:string;size:number;mime:string;sha256:string;scan_status:'pending'|'clean'|'rejected';created_at:string;is_latest:boolean;is_published:boolean}

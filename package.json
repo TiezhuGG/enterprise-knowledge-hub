@@ -24,7 +24,11 @@
     "test:auth": "node --test scripts/auth.integration.mjs",
     "db:migrate": "npm run migrate -w @zhiheng/resources",
     "db:seed:dev": "npm run seed:dev -w @zhiheng/resources",
-    "test:resources": "node --env-file-if-exists=.env --test scripts/resources.integration.mjs"
+    "test:resources": "node --env-file-if-exists=.env --test scripts/resources.integration.mjs",
+    "storage:init": "npm run storage:init -w @zhiheng/resources",
+    "uploads:cleanup": "npm run uploads:cleanup -w @zhiheng/resources --",
+    "test:uploads": "node --env-file-if-exists=.env --test scripts/uploads.integration.mjs",
+    "storage:dev": "moto_server -H 127.0.0.1 -p 9000"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

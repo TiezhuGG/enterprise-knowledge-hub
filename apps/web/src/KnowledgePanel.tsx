@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Checkbox, Empty, Form, Input, List, Modal, Select, Space, Tag, Typography } from 'antd';
+import { DocumentsPanel } from './DocumentsPanel';
 import { RESOURCE_ACTIONS, type KnowledgeBase, type ResourceGrant, type ResourcePage, type SessionInfo } from '@zhiheng/contracts';
 
 const labels = { read: '阅读', download: '下载', write: '上传与编辑', publish: '发布', delete: '删除文档', manage: '管理配置', manage_acl: '管理权限' };
 const errorText = (status: number) => status === 401 ? '登录已失效，请重新登录。' : status === 404 ? '内容不可用或无权访问。' : status === 412 ? '配置已被其他人修改，请关闭并重新打开后再操作。' : status === 409 ? '变更存在冲突，请保留至少一位有效管理者，并检查创建请求是否重复。' : status === 400 ? '请检查名称、成员或组标识以及权限配置。' : status === 403 ? '当前身份不允许执行此操作。' : '服务暂时不可用，请稍后重试。';
 export function KnowledgePanel({ session, onExpired }: { session: SessionInfo; onExpired: () => void }) {
+  const [documentKb, setDocumentKb] = useState<KnowledgeBase | null>(null);
   const [rows, setRows] = useState<KnowledgeBase[]>([]);
   const [next, setNext] = useState<string | null>(null);
   const [q, setQ] = useState(''); const [status, setStatus] = useState('active');
@@ -89,6 +91,7 @@ export function KnowledgePanel({ session, onExpired }: { session: SessionInfo; o
       <Button disabled={busy} onClick={() => void load()}>刷新列表</Button>
     </Space>
     <List className="knowledge-list" loading={busy} dataSource={rows} locale={{ emptyText: <Empty description="暂无可见知识库，或当前身份尚未获授权" /> }} renderItem={row => <List.Item actions={[
+      <Button key="documents" onClick={() => setDocumentKb(row)}>文档与上传</Button>,
       <Button key="open" onClick={() => void open(row)}>查看</Button>,
       ...(row.capabilities.includes('manage_acl') ? [<Button key="acl" onClick={() => void openAcl(row)}>管理权限</Button>] : []),
     ]}>
@@ -96,6 +99,9 @@ export function KnowledgePanel({ session, onExpired }: { session: SessionInfo; o
     </List.Item>} />
     {next && <Button disabled={busy} onClick={() => void load(next, true)}>加载更多</Button>}
     <Typography.Paragraph type="secondary">新建知识库默认私有。这里只显示当前身份获授权的资源。</Typography.Paragraph>
+    <Modal title={documentKb ? `${documentKb.name} · 文档` : '文档'} open={!!documentKb} onCancel={() => setDocumentKb(null)} footer={null} width={800} destroyOnHidden>
+      {documentKb && <DocumentsPanel key={documentKb.id} kb={documentKb} session={session} onExpired={onExpired} />}
+    </Modal>
     <Modal title="新建知识库" open={createOpen} footer={null} onCancel={() => setCreateOpen(false)} destroyOnHidden>
       {notice}<Form form={createForm} layout="vertical" onFinish={create}>
         <Form.Item name="name" label="知识库名称" rules={[{ required: true, whitespace: true, max: 100 }]}><Input maxLength={100} /></Form.Item>
