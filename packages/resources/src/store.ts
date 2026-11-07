@@ -12,8 +12,8 @@ const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 const manages = ['manage', 'manage_acl'];
 const principal = `(a.member_id=$2 OR EXISTS (SELECT 1 FROM group_member gm WHERE gm.tenant_id=a.tenant_id AND gm.group_id=a.group_id AND gm.member_id=$2))`;
 // Same tenant/principal/role predicate used by direct reads and pre-pagination filtering.
-const kbCaps = `(SELECT array_agg(DISTINCT action) FROM acl_entry a CROSS JOIN LATERAL unnest(a.actions) action WHERE a.tenant_id=k.tenant_id AND a.kb_id=k.id AND ${principal} AND action=ANY($3::text[]))`;
-const docCaps = `(SELECT array_agg(DISTINCT action) FROM acl_entry a CROSS JOIN LATERAL unnest(a.actions) action WHERE a.tenant_id=d.tenant_id AND a.document_id=d.id AND ${principal} AND action=ANY($3::text[]))`;
+export const kbCaps = `(SELECT array_agg(DISTINCT action) FROM acl_entry a CROSS JOIN LATERAL unnest(a.actions) action WHERE a.tenant_id=k.tenant_id AND a.kb_id=k.id AND ${principal} AND action=ANY($3::text[]))`;
+export const docCaps = `(SELECT array_agg(DISTINCT action) FROM acl_entry a CROSS JOIN LATERAL unnest(a.actions) action WHERE a.tenant_id=d.tenant_id AND a.document_id=d.id AND ${principal} AND action=ANY($3::text[]))`;
 
 export class ResourceStore {
   protected readonly pool;

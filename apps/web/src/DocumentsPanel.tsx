@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { JobsPanel } from './JobsPanel';
 import { Alert, Button, Card, Empty, List, Space, Tag, Typography } from 'antd';
 import type { DocumentVersion, FinalizedUpload, KnowledgeBase, KnowledgeDocument, ResourcePage, SessionInfo, UploadTicket } from '@zhiheng/contracts';
 const failure=(status:number)=>status===404?'内容不可用或无权访问。':status===401?'登录已失效，请重新登录。':status===410?'上传票据已过期，请重新上传。':status===413?'文件超过当前上传大小限制。':status===415?'文件格式或实际内容不受支持，请使用 UTF-8 TXT、Markdown 或 PDF。':status===422?'文件大小或校验值不一致，请重新选择文件。':status===409?'文档或上传状态已变化，请刷新并确认目标后重试。':status===429?'上传额度或并发已达上限，请稍后重试。':'服务暂时不可用，请重试。';
@@ -60,6 +61,7 @@ export function DocumentsPanel({kb,session,onExpired}:{kb:KnowledgeBase;session:
       ...(doc.capabilities.includes('write')?[<Button key="replace" disabled={busy} onClick={()=>chooseTarget(doc)}>上传新版本</Button>]:[]),
     ]}><List.Item.Meta title={doc.title} description={doc.status==='draft'?'草稿 · 尚未发布':doc.status==='active'?'已发布':'已归档'}/></List.Item>}/>
     {next&&<Button disabled={busy} onClick={()=>void load(next).catch(()=>setError('文档加载失败，请重试。'))}>加载更多文档</Button>}
+    {viewing&&viewing.capabilities.some(action=>['write','manage'].includes(action))&&<JobsPanel key={viewing.id} document={viewing} session={session} onExpired={onExpired}/>}
     {viewing&&<Card size="small" title={`${viewing.title} · 版本`}>
       <List className="knowledge-list" dataSource={versions} locale={{emptyText:'暂无可见版本'}} renderItem={version=><List.Item actions={viewing.capabilities.includes('download')?[<Button key="download" href={`/api/v1/documents/${viewing.id}/versions/${version.id}/content`}>下载原文件</Button>]:[]}>
         <List.Item.Meta title={<Space wrap>{`v${version.version_no}`}{version.is_latest&&<Tag>最新上传</Tag>}{version.is_published&&<Tag>已发布</Tag>}</Space>} description={`${version.filename} · ${version.size} 字节 · ${version.scan_status==='pending'?'待安全检查与解析':version.scan_status==='clean'?'安全检查通过':'已拒绝'}`}/>

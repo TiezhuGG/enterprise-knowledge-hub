@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import type { IdentityContext, DocumentVersion, UploadTicket, FinalizedUpload } from '@zhiheng/contracts';
+import { ensureIngestionJob, ingestionConfig } from './job-contract';
 import { transaction } from './database';
 import { ResourceStore, type ListInput } from './store';
 import { fail } from './policy';
@@ -51,7 +52,8 @@ export class UploadStore extends ResourceStore {
   });}
   private async result(client:PoolClient,tenant:string,documentId:string,versionId:string):Promise<FinalizedUpload>{
     const row=await client.query('SELECT version_no FROM document_version WHERE tenant_id=$1 AND id=$2 AND document_id=$3',[tenant,versionId,documentId]);
-    return {document_id:documentId,version_id:versionId,version_no:row.rows[0].version_no,status:'awaiting_processing',status_url:`/api/v1/documents/${documentId}/versions/${versionId}`};
+    const job=await ensureIngestionJob(client,tenant,versionId,ingestionConfig().maxAttempts);
+    return {document_id:documentId,version_id:versionId,version_no:row.rows[0].version_no,job_id:job.id,status:job.status,status_url:`/api/v1/jobs/${job.id}`};
   }
   finalizeUpload(current:IdentityContext,id:string,checksum:string,requestId:string){return this.run(current,async(client,member)=>{
     await this.quotaLock(client,member.tenant_id);const ticket=await this.ticket(client,member,id);

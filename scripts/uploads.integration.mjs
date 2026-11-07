@@ -49,7 +49,7 @@ test('upload tickets, S3 immutable originals, document versions and access bound
    assert.equal((await put(api,operator,first.ticket,data)).status,204);assert.equal((await put(api,operator,first.ticket,data)).status,204);
   });
   await t.test('concurrent finalize creates one immutable version and one outbox event',async()=>{
-   const responses=await Promise.all([finalize(api,operator,first.ticket,data),finalize(api,operator,first.ticket,data)]);const [a,b]=await Promise.all(responses.map(r=>readResult(r,202)));assert.equal(a.version_id,b.version_id);first.result=a;assert.equal(a.status,'awaiting_processing');
+   const responses=await Promise.all([finalize(api,operator,first.ticket,data),finalize(api,operator,first.ticket,data)]);const [a,b]=await Promise.all(responses.map(r=>readResult(r,202)));assert.equal(a.version_id,b.version_id);first.result=a;assert.equal(a.status,'queued');
    assert.equal((await db.query('SELECT count(*) FROM document_outbox')).rows[0].count,'1');assert.equal((await db.query('SELECT count(*) FROM document_version')).rows[0].count,'1');
    await assert.rejects(()=>db.query('UPDATE document_version SET version_no=99 WHERE id=$1',[a.version_id]),e=>e.code==='23514');
    await assert.rejects(()=>db.query("UPDATE source_asset SET filename='changed'"),e=>e.code==='23514');

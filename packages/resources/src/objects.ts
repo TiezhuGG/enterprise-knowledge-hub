@@ -4,7 +4,7 @@ import { ResourceError, fail } from './policy';
 export const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 export interface ObjectStore {
   put(key:string,bytes:Buffer,mime:string):Promise<string>;
-  read(key:string,version:string,maxBytes:number):Promise<Buffer>;
+  read(key:string,version:string,maxBytes:number,signal?:AbortSignal):Promise<Buffer>;
   remove(key:string,version:string):Promise<void>;
   findVersion(key:string):Promise<string|null>;
 }
@@ -44,8 +44,8 @@ export class S3Objects implements ObjectStore {
       if(sha256(existing)!==sha256(bytes))fail(422,'STORED_CONTENT_MISMATCH');return head.VersionId;
     }
   });}
-  read(key:string,version:string,maxBytes:number) {return this.send(async()=>{
-    const response=await this.client.send(new GetObjectCommand({Bucket:this.bucket,Key:key,VersionId:version}),{abortSignal:AbortSignal.timeout(20000)});
+  read(key:string,version:string,maxBytes:number,signal?:AbortSignal) {return this.send(async()=>{
+    const response=await this.client.send(new GetObjectCommand({Bucket:this.bucket,Key:key,VersionId:version}),{abortSignal:signal?AbortSignal.any([signal,AbortSignal.timeout(20000)]):AbortSignal.timeout(20000)});
     if(!response.Body)fail(503,'OBJECT_MISSING');
     const chunks:Buffer[]=[];let size=0;
     for await(const chunk of response.Body as AsyncIterable<Uint8Array>){size+=chunk.length;if(size>maxBytes){(response.Body as {destroy?:()=>void}).destroy?.();fail(422,'STORED_SIZE_MISMATCH')}chunks.push(Buffer.from(chunk))}

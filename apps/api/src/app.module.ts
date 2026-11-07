@@ -6,6 +6,7 @@ import { AuthGuard, Public } from './auth/auth.guard';
 import { ResourcesModule } from './resources/resources.module';
 import { KnowledgeController, DocumentController } from './resources/resources.controller';
 import { UploadController, VersionsController } from './resources/uploads.controller';
+import { JobsController } from './resources/jobs.controller';
 import { ResourceFilter } from './resources/resources.filter';
 import type { HealthResponse } from '@zhiheng/contracts';
 
@@ -18,5 +19,5 @@ class HealthController {
   }
 }
 
-@Module({ imports: [ResourcesModule], controllers: [HealthController, AuthController, KnowledgeController, DocumentController, UploadController, VersionsController], providers: [AuthService, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ResourceFilter }] })
+@Module({ imports: [ResourcesModule], controllers: [HealthController, AuthController, KnowledgeController, DocumentController, UploadController, VersionsController, JobsController], providers: [AuthService, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ResourceFilter }] })
 export class AppModule {}

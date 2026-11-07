@@ -1,6 +1,6 @@
 # P1-04 上传与不可变文档版本
 
-日期：2026-11-07。已实现受控原文件上传、不可变版本、重复提交处理与授权下载。解析、杀毒扫描、索引、发布和后台重试状态机属于后续任务；当前新版本一律保持草稿、scan_status=pending，不参与检索。
+日期：2026-11-07。已实现受控原文件上传、不可变版本、重复提交处理与授权下载。P1-05 已接入后台状态机；实际解析、杀毒扫描、索引与发布属于后续任务；当前新版本一律保持草稿、scan_status=pending，不参与检索。
 
 ## 启动与对象存储
 
@@ -46,7 +46,7 @@ npm run dev
 4. 服务端逐块接收并限制字节数，校验真实长度、SHA-256 和基础格式。写入仅由服务端生成的唯一 key，使用 S3 If-None-Match 与明确 VersionId 固定内容。
 5. POST `/api/v1/upload-tickets/:id/finalize`（Idempotency-Key、JSON sha256），重新核验归属、当前权限、有效期、版本化对象真实字节与摘要。
 6. 同一 PostgreSQL 事务登记 source_asset、不可变 document_version、latest_version_id、完成票据、document.version_created Outbox 与变更审计。
-7. 202 返回 document_id、version_id、version_no、status=awaiting_processing、指向版本元数据的 status_url。**P1-05 尚未创建运行队列，本阶段不返回虚构 job_id/generation_id 或声称已解析。**
+7. 202 返回 document_id、version_id、version_no、真实 job_id、当前任务状态和任务 status_url。P1-05 已接入持久任务，见 [任务说明](p1-05-ingestion-jobs.md)；实际解析与索引仍待后续任务。
 
 GET `/api/v1/upload-tickets/:id` 可查询本人票据状态。中断后可再次上传同一票据；界面会保留当前尝试的幂等键并重试。刷新整个浏览器后需重新选择文件；若需要恢复原尝试，可用已返回票据 ID 查询接口，当前尚未实现跨刷新上传历史 UI。
 

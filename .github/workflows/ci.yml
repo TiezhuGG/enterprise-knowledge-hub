@@ -29,6 +29,7 @@ jobs:
           curl --retry 15 --retry-connrefused --retry-delay 1 --max-time 30 -fsS http://127.0.0.1:9000/ > /dev/null
       - run: npm run storage:init
       - run: npm run test:uploads
+      - run: npm run test:ingestion
       - name: Worker queue and independent restart
         run: |
           node --env-file=.env apps/worker/dist/main.js > /tmp/worker.log 2>&1 &

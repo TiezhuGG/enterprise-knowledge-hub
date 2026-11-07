@@ -44,5 +44,19 @@ export interface UploadTicket {
   ticket_id:string; document_id:string; status:'open'|'uploaded'|'finalized'; expires_at:string; max_size:number;
   upload:{method:'PUT';url:string;headers:Record<string,string>}; finalize_url:string;
 }
-export interface FinalizedUpload {document_id:string;version_id:string;version_no:number;status:'awaiting_processing';status_url:string}
+export interface FinalizedUpload {document_id:string;version_id:string;version_no:number;job_id:string;status:IngestionStatus;status_url:string}
 export interface DocumentVersion {id:string;document_id:string;version_no:number;filename:string;size:number;mime:string;sha256:string;scan_status:'pending'|'clean'|'rejected';created_at:string;is_latest:boolean;is_published:boolean}
+
+export const INGEST_JOB_NAME='ingest-version';
+export type IngestionStatus='queued'|'running'|'retry_wait'|'waiting_dependency'|'succeeded'|'failed'|'cancelled';
+export interface IngestionDelivery {tenant_id:string;job_id:string;revision:number}
+export interface IngestionJob {
+  id:string;kb_id:string;document_id:string;version_id:string;version_no:number;pipeline_version:string;
+  status:IngestionStatus;stage:string;error_code:string|null;dead_letter:boolean;
+  run_no:number;attempt_count:number;total_attempts:number;max_attempts:number;progress:null;
+  next_run_at:string|null;cancel_requested:boolean;created_at:string;updated_at:string;
+}
+export interface IngestionDetails extends IngestionJob {
+  attempts:Array<{run_no:number;attempt_no:number;status:string;error_code:string|null;started_at:string;ended_at:string|null}>;
+  events:Array<{seq:number;run_no:number;status:string;stage:string;error_code:string|null;occurred_at:string}>;
+}

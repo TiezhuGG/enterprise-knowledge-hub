@@ -1,6 +1,6 @@
 # P1-01 开发入口
 
-实现日期：2026-11-07。已扩展 P1-02 开发身份与 P1-03 知识库权限及 P1-04 上传版本，见 [身份说明](p1-02-authentication.md)；不代表 RAG 或企业上线验收完成。
+实现日期：2026-11-07。已扩展 P1-02 开发身份与 P1-03 知识库权限、P1-04 上传版本及 P1-05 持久任务，见 [身份说明](p1-02-authentication.md)；不代表 RAG 或企业上线验收完成。
 
 ## 环境与启动
 
@@ -28,11 +28,11 @@ npm run dev
 |---|---|---|
 | apps/web | React + TypeScript + Vite + Ant Design | 中文起始页、真实 API 检查、超时与重试 |
 | apps/api | NestJS HTTP 进程 | 存活、开发认证与知识库/文档权限接口 |
-| apps/worker | 独立 NestJS 应用上下文 + BullMQ | 仅 development-smoke 队列的 ping 任务 |
+| apps/worker | 独立 NestJS 应用上下文 + BullMQ | PG持久处理任务与开发 ping |
 | packages/contracts | 前后端共享的数据契约 | 存活响应、开发队列名称与输入 |
 | packages/config | 服务端配置入口 | API 与 Redis 配置校验，不导出给前端 |
 
-API 不依赖 Worker 进程，可独立启动、停止和部署；Worker 只连接 Redis，不引用 API。开发 Worker 在 NODE_ENV=production 下拒绝运行。后续 P1-05 增加持久化业务任务状态、幂等和重试；当前 ping 不写业务数据，也不能作为生产解析器。
+API 不依赖 Worker 进程，可独立启动、停止和部署；Worker 通过共享资源包访问 PostgreSQL/S3 并消费 Redis，不请求 API。production 下关闭开发 ping；业务任务由 P1-05 的持久状态机执行，当前仅校验原文并等待解析器，见 [任务说明](p1-05-ingestion-jobs.md)。
 
 ```sh
 npm run build
