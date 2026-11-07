@@ -20,7 +20,8 @@
     "check": "npm run typecheck && npm test",
     "infra:up": "docker compose up -d --wait",
     "infra:down": "docker compose down",
-    "smoke:queue": "npm run smoke -w @zhiheng/worker"
+    "smoke:queue": "npm run smoke -w @zhiheng/worker",
+    "test:auth": "node --test scripts/auth.integration.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

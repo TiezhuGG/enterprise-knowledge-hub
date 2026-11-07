@@ -2,9 +2,9 @@
 
 Enterprise Knowledge Hub｜项目规划与界面设计基线｜2026-11-06
 
-**已进入编码阶段：P1-01 工程骨架与开发环境。** 现包含 React 前端、NestJS API、独立 BullMQ 开发 Worker、共享契约、配置与 CI；业务功能尚未实现。设计稿数据为虚构示例，仓库不含真实密钥。
+**已进入编码阶段：P1-01 工程骨架与 P1-02 开发身份登录。** 现包含 React 前端、NestJS API、独立 BullMQ 开发 Worker、共享契约、配置与 CI；企业 OIDC、知识库与 RAG 业务功能尚未实现。设计稿数据为虚构示例，仓库不含真实密钥。
 
-开发启动、环境要求与验证命令见 [开发说明](docs/development.md)。
+开发启动、环境要求与验证命令见 [开发说明](docs/development.md)；登录配置与安全边界见 [身份说明](docs/p1-02-authentication.md)。
 
 ```sh
 cp .env.example .env
@@ -23,7 +23,7 @@ npm run dev
 6. 阅读 [任务与 Agent 学习路线](docs/05-roadmap-and-learning.md)，从 P0 首项按依赖推进。
 7. 阅读 [界面规格](docs/06-ui-specification.md)，再打开 `design/ui-design-book.pdf` 查看32个主界面和补充状态设计。
 
-项目可直接从文件管理器浏览，无需安装依赖。`design/screens/` 保存逐页 PNG，`design/ui-design-book.pdf` 是完整设计册，`design/contact-sheet.png` 是总览。设计按钮只是画面示意，不会调用后台。
+设计材料可直接从文件管理器浏览，无需安装依赖；运行应用需按开发说明安装依赖。`design/screens/` 保存逐页 PNG，`design/ui-design-book.pdf` 是完整设计册，`design/contact-sheet.png` 是总览。设计按钮只是画面示意，不会调用后台。
 
 ## 目录
 

@@ -4,6 +4,7 @@ import { Alert, Button, Card, ConfigProvider, Space, Tag, Typography } from 'ant
 import zhCN from 'antd/locale/zh_CN';
 import type { HealthResponse } from '@zhiheng/contracts';
 import './style.css';
+import { SessionPanel } from './SessionPanel';
 
 function App() {
   const [status, setStatus] = useState<'loading' | 'ok' | 'error'>('loading');
@@ -25,11 +26,12 @@ function App() {
   }, [attempt]);
   return <ConfigProvider locale={zhCN} theme={{ token: { colorPrimary: '#236c5b', borderRadius: 12 } }}>
     <main>
-      <header><strong>知衡</strong><span>企业知识中枢</span><Tag>开发环境 · P1-01</Tag></header>
+      <header><strong>知衡</strong><span>企业知识中枢</span><Tag>开发环境 · P1-02</Tag></header>
       <section>
         <Typography.Text className="eyebrow">从可信的知识开始</Typography.Text>
         <Typography.Title>让每一次回答，都有据可循。</Typography.Title>
-        <Typography.Paragraph>工程骨架已建立。接下来逐步接入身份、知识库与带引用的问答。</Typography.Paragraph>
+        <Typography.Paragraph>登录当前工作空间，逐步连接可信的知识与带引用的问答。</Typography.Paragraph>
+        <SessionPanel />
         <Card title="开发服务状态">
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <Alert showIcon type={status === 'ok' ? 'success' : status === 'error' ? 'error' : 'info'}
@@ -38,7 +40,7 @@ function App() {
             <Button onClick={() => setAttempt(value => value + 1)} loading={status === 'loading'}>重新检查</Button>
           </Space>
         </Card>
-        <p className="note">当前为开发起始页。登录、上传、问答等业务功能尚未实现。</p>
+        <p className="note">当前支持开发身份登录。知识库、上传与问答功能将在后续任务实现。</p>
       </section>
     </main>
   </ConfigProvider>;
