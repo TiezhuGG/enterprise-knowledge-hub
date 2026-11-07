@@ -131,7 +131,7 @@ export interface Conversation {id:string;title:string;row_version:number;created
 export type ChatStage='queued'|'retrieving'|'generating'|'validating'|'finished';
 export interface ChatRun {
  id:string;conversation_id:string;question_message_id:string;message_id:string;parent_run_id:string|null;question:string;
- status:'running'|'completed'|'failed'|'cancelled'|'restricted';stage:ChatStage;last_event_id:number;
+ status:'running'|'completed'|'failed'|'cancelled'|'restricted'|'expired';stage:ChatStage;last_event_id:number;
  answer:AnswerResponse|null;error_code:string|null;feedback:'helpful'|'unhelpful'|null;created_at:string;
  events_url:string;status_url:string;cancel_url:string;
 }

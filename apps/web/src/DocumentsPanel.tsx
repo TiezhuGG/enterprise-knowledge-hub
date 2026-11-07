@@ -1,3 +1,4 @@
+import {CleanupsPanel} from './CleanupsPanel';
 import {CorrectionsPanel} from './CorrectionsPanel';
 import { IndexPanel } from './IndexPanel';
 import { ChunkPanel } from './ChunkPanel';
@@ -7,9 +8,10 @@ import { Modal } from 'antd';
 import { JobsPanel } from './JobsPanel';
 import { Alert, Button, Card, Empty, Input, List, Select, Space, Tag, Typography } from 'antd';
 import type { DocumentVersion, FinalizedUpload, KnowledgeBase, KnowledgeDocument, ResourcePage, SessionInfo, UploadTicket } from '@zhiheng/contracts';
-const failure=(status:number)=>status===404?'内容不可用或无权访问。':status===401?'登录已失效，请重新登录。':status===410?'上传票据已过期，请重新上传。':status===413?'文件超过当前上传大小限制。':status===415?'文件格式或实际内容不受支持，请使用 UTF-8 TXT、Markdown、PDF 或 DOCX。':status===422?'文件大小或校验值不一致，请重新选择文件。':status===409?'文档或上传状态已变化，请刷新并确认目标后重试。':status===429?'上传额度或并发已达上限，请稍后重试。':'服务暂时不可用，请重试。';
+const failure=(status:number)=>status===404?'内容不可用或无权访问。':status===401?'登录已失效，请重新登录。':status===410?'上传票据已过期，请重新上传。':status===413?'文件超过当前上传大小限制。':status===415?'文件格式或实际内容不受支持，请使用 UTF-8 TXT、Markdown、PDF 或 DOCX。':status===422?'文件大小或校验值不一致，请重新选择文件。':status===412?'文档或权限已变化，请关闭确认框，刷新文档后重试。':status===409?'文档或上传状态已变化，请刷新并确认目标后重试。':status===429?'上传额度或并发已达上限，请稍后重试。':'服务暂时不可用，请重试。';
 interface Attempt {fingerprint:string;key:string;ticket?:UploadTicket;finalizeKey:string}
 export function DocumentsPanel({kb,session,onExpired}:{kb:KnowledgeBase;session:SessionInfo;onExpired:()=>void}) {
+  const [deleting,setDeleting]=useState<KnowledgeDocument|null>(null),[deleteKey,setDeleteKey]=useState(''),[deleteEtag,setDeleteEtag]=useState('');
   const [correctionVersion,setCorrectionVersion]=useState<DocumentVersion|null>(null),[query,setQuery]=useState(''),[state,setState]=useState('');
   const [indexVersion,setIndexVersion]=useState<DocumentVersion|null>(null);
   const [chunkVersion,setChunkVersion]=useState<DocumentVersion|null>(null),[focusBlockId,setFocusBlockId]=useState<string|undefined>();
@@ -57,7 +59,11 @@ export function DocumentsPanel({kb,session,onExpired}:{kb:KnowledgeBase;session:
     }catch(cause){setMessage('');setError(controller.current?.signal.aborted?'上传已停止，可再次点击上传以恢复。':cause instanceof Error?cause.message:'上传失败，请重试。')}
     finally{clearTimeout(timer);controller.current=null;setBusy(false)}
   }
+  async function beginDelete(doc:KnowledgeDocument){try{setError('');const r=await request(`/documents/${doc.id}`);setDeleteEtag(r.headers.get('etag')!);setDeleting((await r.json()).data);setDeleteKey(crypto.randomUUID())}catch(e){setError((e as Error).message)}}
+  async function removeDocument(){if(!deleting)return;setBusy(true);setError('');try{await request(`/documents/${deleting.id}`,{method:'DELETE',headers:{'If-Match':deleteEtag,'Idempotency-Key':deleteKey}});if(target?.id===deleting.id)chooseTarget(null);setDeleting(null);setMessage('文档访问已失效，物理清理进度见删除与清理记录。');await refresh()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
   return <Space direction="vertical" size="middle" style={{width:'100%'}}>
+    <Modal title="删除文档" open={!!deleting} onCancel={()=>setDeleting(null)} onOk={()=>void removeDocument()} okText="确认删除" okButtonProps={{danger:true}} confirmLoading={busy}><Typography.Paragraph>删除“{deleting?.title}”后无法恢复；原文、历史引用和后续检索会立即不可用。对象和向量在保留期后异步清理，可查看处理记录。</Typography.Paragraph>{error&&<Alert type="error" message={error}/>}</Modal>
+    {kb.capabilities.includes('delete')&&<CleanupsPanel key={message} kb={kb} session={session} onExpired={onExpired}/>}
     {error&&<Alert role="alert" type="error" showIcon message={error}/>}
     {message&&<Alert role="status" type="info" showIcon message={message}/>}
     {kb.capabilities.includes('write')&&<Card size="small" title={target?`上传新版本：${target.title}`:'上传新文档'}>
@@ -69,6 +75,7 @@ export function DocumentsPanel({kb,session,onExpired}:{kb:KnowledgeBase;session:
     </Card>}
     <Space wrap><Input.Search aria-label="搜索文档" placeholder="搜索可见文档" disabled={busy} allowClear onSearch={setQuery} style={{width:220}}/><Select aria-label="文档状态筛选" disabled={busy} value={state} onChange={setState} style={{width:140}} options={[{value:"",label:"全部文档状态"},{value:"draft",label:"草稿"},{value:"active",label:"使用中"},{value:"archived",label:"已归档"}]}/><Button disabled={busy} onClick={()=>void refresh()}>刷新文档</Button></Space>
     <List className="knowledge-list" dataSource={documents} locale={{emptyText:<Empty description="暂无可见文档"/>}} renderItem={doc=><List.Item actions={[
+      ...(doc.capabilities.includes('delete')?[<Button key="delete" danger disabled={busy} onClick={()=>void beginDelete(doc)}>删除文档</Button>]:[]),
       <Button key="versions" disabled={busy} onClick={()=>void showVersions(doc)}>查看版本</Button>,
       ...(doc.capabilities.includes('write')?[<Button key="replace" disabled={busy} onClick={()=>chooseTarget(doc)}>上传新版本</Button>]:[]),
     ]}><List.Item.Meta title={doc.title} description={doc.status==='draft'?'草稿 · 尚未发布':doc.status==='active'?'使用中（发布状态见版本）':'已归档'}/></List.Item>}/>

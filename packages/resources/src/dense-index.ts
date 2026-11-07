@@ -19,5 +19,13 @@ export class DenseIndex {
  async verify(rows:Array<Record<string,any>>){try{const found=this.ok(await this.call(()=>this.client.query({collection_name:this.collection,filter:`tenant_id == ${JSON.stringify(String(rows[0]!.tenant_id))} && generation_id == ${JSON.stringify(String(rows[0]!.generation_id))} && id in ${JSON.stringify(rows.map(r=>r.id))}`,output_fields:['id','tenant_id','generation_id','model_space','retrieval_sha256','vector'],consistency_level:ConsistencyLevelEnum.Strong})));return this.matches(rows,found)}catch(error){if(error instanceof IndexFailure)throw error;throw new IndexFailure('VECTOR_STORE_UNAVAILABLE',true)}}
  async write(rows:Array<Record<string,any>>){try{this.ok(await this.call(()=>this.client.upsert({collection_name:this.collection,data:rows})));this.ok(await this.call(()=>this.client.flush({collection_names:[this.collection]})));if(!await this.verify(rows))throw new IndexFailure('VECTOR_VERIFICATION_FAILED',true)}catch(error){if(error instanceof IndexFailure)throw error;throw new IndexFailure('VECTOR_STORE_UNAVAILABLE',true)}}
  async search(tenant:string,generation:string,space:string,vector:number[],limit=5){if(space!==this.profile.hash||vector.length!==this.profile.dimension||vector.some(n=>!Number.isFinite(n)))throw new IndexFailure('EMBEDDING_SPACE_MISMATCH');return this.ok(await this.call(()=>this.client.search({collection_name:this.collection,vector,filter:`tenant_id == ${JSON.stringify(tenant)} && generation_id == ${JSON.stringify(generation)} && model_space == ${JSON.stringify(space)}`,limit,output_fields:['chunk_id','generation_id','model_space'],metric_type:'COSINE',consistency_level:ConsistencyLevelEnum.Strong})));}
+ async erase(tenant:string,generation:string){
+  const listed=this.ok(await this.call(()=>this.client.listCollections()));if(!listed.data.some((c:any)=>c.name===this.collection))return;
+  await this.validate();const filter=`tenant_id == ${JSON.stringify(tenant)} && generation_id == ${JSON.stringify(generation)}`;
+  this.ok(await this.call(()=>this.client.delete({collection_name:this.collection,filter})));
+  this.ok(await this.call(()=>this.client.flush({collection_names:[this.collection]})));
+  const found=this.ok(await this.call(()=>this.client.query({collection_name:this.collection,filter,output_fields:['id'],limit:1,consistency_level:ConsistencyLevelEnum.Strong})));
+  if(found.data.length)throw new IndexFailure('VECTOR_DELETE_UNCONFIRMED',true);
+ }
  close(){void this.client.closeConnection().catch(()=>{})}
 }

@@ -1,3 +1,4 @@
+import {LifecycleController} from './resources/lifecycle.controller';
 import {CorrectionsController} from './resources/corrections.controller';
 import {ChatController} from './resources/chat.controller';
 import {SearchController} from './resources/search.controller';
@@ -22,5 +23,5 @@ class HealthController {
   }
 }
 
-@Module({ imports: [ResourcesModule], controllers: [HealthController, AuthController, KnowledgeController, DocumentController, UploadController, VersionsController, JobsController, SearchController, ChatController, CorrectionsController], providers: [AuthService, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ResourceFilter }] })
+@Module({ imports: [ResourcesModule], controllers: [HealthController, AuthController, KnowledgeController, DocumentController, UploadController, VersionsController, JobsController, SearchController, ChatController, CorrectionsController, LifecycleController], providers: [AuthService, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ResourceFilter }] })
 export class AppModule {}

@@ -1,8 +1,10 @@
-import { S3Client, CreateBucketCommand, PutBucketVersioningCommand, GetBucketVersioningCommand, PutPublicAccessBlockCommand, PutObjectCommand, HeadObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, CreateBucketCommand, PutBucketVersioningCommand, GetBucketVersioningCommand, PutPublicAccessBlockCommand, PutObjectCommand, HeadObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
 import { createHash } from 'node:crypto';
 import { ResourceError, fail } from './policy';
 export const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 export interface ObjectStore {
+  readonly storageIdentity?:string;
+  inventory?(prefix:string):Promise<Array<{key:string;version:string}>>;
   put(key:string,bytes:Buffer,mime:string):Promise<string>;
   read(key:string,version:string,maxBytes:number,signal?:AbortSignal):Promise<Buffer>;
   remove(key:string,version:string):Promise<void>;
@@ -10,7 +12,9 @@ export interface ObjectStore {
 }
 export class S3Objects implements ObjectStore {
   private client:S3Client;
+  readonly storageIdentity:string;
   constructor(private readonly bucket:string,env:NodeJS.ProcessEnv=process.env) {
+    this.storageIdentity=sha256(Buffer.from(JSON.stringify([env.S3_ENDPOINT?.replace(/\/+$/,'')??'aws',env.S3_REGION??'us-east-1',bucket])));
     this.client=new S3Client({region:env.S3_REGION??'us-east-1',endpoint:env.S3_ENDPOINT||undefined,
       forcePathStyle:!!env.S3_ENDPOINT, maxAttempts:2,
       requestChecksumCalculation:'WHEN_REQUIRED',responseChecksumValidation:'WHEN_REQUIRED',
@@ -53,5 +57,11 @@ export class S3Objects implements ObjectStore {
   });}
   findVersion(key:string){return this.send(async()=>{try{const result=await this.client.send(new HeadObjectCommand({Bucket:this.bucket,Key:key}),{abortSignal:AbortSignal.timeout(10000)});return result.VersionId??null}catch(error){if((error as {$metadata?:{httpStatusCode?:number}}).$metadata?.httpStatusCode===404)return null;throw error}})}
   async remove(key:string,version:string){await this.send(()=>this.client.send(new DeleteObjectCommand({Bucket:this.bucket,Key:key,VersionId:version}),{abortSignal:AbortSignal.timeout(10000)}))}
+  async inventory(prefix:string){return this.send(async()=>{const rows:Array<{key:string;version:string}>=[];let key:string|undefined,version:string|undefined;
+    do{const page=await this.client.send(new ListObjectVersionsCommand({Bucket:this.bucket,Prefix:prefix,KeyMarker:key,VersionIdMarker:version,MaxKeys:1000}),{abortSignal:AbortSignal.timeout(10000)});
+      for(const item of [...(page.Versions??[]),...(page.DeleteMarkers??[])]){if(!item.Key||!item.VersionId)fail(503,'OBJECT_INVENTORY_INCOMPLETE');rows.push({key:item.Key,version:item.VersionId})}
+      if(rows.length>10000)fail(409,'OBJECT_INVENTORY_LIMIT');if(!page.IsTruncated)break;if(!page.NextKeyMarker)fail(503,'OBJECT_INVENTORY_INCOMPLETE');key=page.NextKeyMarker;version=page.NextVersionIdMarker;
+    }while(true);return rows;
+  })}
   close(){this.client.destroy()}
 }

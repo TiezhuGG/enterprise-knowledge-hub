@@ -10,6 +10,7 @@ import { validateUpload, verifyBytes, type UploadInput, type UploadLimits } from
 
 export class UploadStore extends ResourceStore {
   constructor(url:string|undefined,schema:string|undefined,secret:string|undefined,protected readonly objects:ObjectStore,readonly uploadLimits:UploadLimits) {super(url,schema,secret)}
+  protected objectStorageIdentity(){return this.objects.storageIdentity}
   private async quotaLock(client:PoolClient,tenant:string){await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`upload-quota:${tenant}`])}
   private ticketView(row:any):UploadTicket {return {ticket_id:row.id,document_id:row.assigned_document_id,status:row.status,expires_at:row.expires_at.toISOString(),max_size:this.uploadLimits.maxBytes,
     upload:{method:'PUT',url:`/api/v1/upload-tickets/${row.id}/content`,headers:{'Content-Type':row.mime}},finalize_url:`/api/v1/upload-tickets/${row.id}/finalize`}}
@@ -46,7 +47,7 @@ export class UploadStore extends ResourceStore {
     const bytes=await read(ticket.size);verifyBytes(bytes,ticket);
     if(Date.now()>=ticket.expires_at.getTime())fail(410,'UPLOAD_EXPIRED');
     if(ticket.status==='uploaded')return;
-    const version=await this.objects.put(ticket.object_key,bytes,ticket.mime);
+    const version=await this.trackedWrite(member.tenant_id,ticket.assigned_document_id,null,'source',()=>this.objects.put(ticket.object_key,bytes,ticket.mime));
     await client.query("UPDATE upload_ticket SET status='uploaded',object_version=$3 WHERE tenant_id=$1 AND id=$2",[member.tenant_id,id,version]);
     await this.audit(client,member,id,'upload.received',requestId);
   });}

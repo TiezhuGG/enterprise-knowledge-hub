@@ -20,3 +20,6 @@ export {generationProfile,generate,validateClaims,GenerationFailure} from './gen
 export {ChatStore} from './chat';
 
 export {CorrectionStore,correctionEtag} from './corrections';
+
+export {LifecycleStore} from './lifecycle';
+export {lifecyclePolicy,storageKey} from './lifecycle-policy';

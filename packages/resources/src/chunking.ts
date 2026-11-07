@@ -23,7 +23,7 @@ export class ChunkingStore extends ParsingStore {
   });if(!input)return false;
   const parsed=await this.readParsedArtifact(input.parsed,signal),result=await buildChunks(parsed,input.scope,'structure-v1',signal);if(signal?.aborted)throw new ChunkFailure('CHUNK_CANCELLED');
   const bytes=Buffer.from(JSON.stringify(result)),digest=sha256(bytes),key=`tenants/${lease.tenant_id}/chunks/${input.scope.version_id}/${CHUNKER_VERSION}/${digest}`;
-  const objectVersion=await this.objects.put(key,bytes,'application/json');
+  const objectVersion=await this.trackedWrite(lease.tenant_id,input.scope.document_id,lease.job_id,'chunks',()=>this.objects.put(key,bytes,'application/json'),c=>this.parsingLease(c,lease));
   return transaction(this.pool,async client=>{
    const row=await this.parsingLease(client,lease);if(!row)return false;if(row.chunker_version!==CHUNKER_VERSION)fail(422,'CHUNK_VERSION_UNSUPPORTED');
    const old=(await client.query('SELECT artifact_sha256 FROM chunk_manifest WHERE tenant_id=$1 AND version_id=$2 AND parser_version=$3 AND chunker_version=$4',[row.tenant_id,row.version_id,row.parser_version,CHUNKER_VERSION])).rows[0];

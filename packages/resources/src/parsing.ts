@@ -31,7 +31,7 @@ export class ParsingStore extends IngestionStore {
   if(input.source_sha256!==first.source_sha256)fail(422,'PARSER_INVALID_RESULT');
   const result:ParsedDocument={...input,blocks:input.blocks.map(block=>({...block,id:blockId(first.version_id,block.ordinal)}))};
   const bytes=Buffer.from(JSON.stringify(result));if(bytes.length>20971520)fail(422,'PARSE_OUTPUT_LIMIT');const digest=sha256(bytes),key=`tenants/${lease.tenant_id}/parsed/${first.version_id}/${STRUCTURE_PARSER_VERSION}/${digest}`;
-  const version=await this.objects.put(key,bytes,'application/json');
+  const version=await this.trackedWrite(lease.tenant_id,first.document_id,lease.job_id,'parsed',()=>this.objects.put(key,bytes,'application/json'),c=>this.parsingLease(c,lease));
   return transaction(this.pool,async client=>{
    const row=await this.parsingLease(client,lease);if(!row)return false;
    const old=(await client.query('SELECT artifact_sha256 FROM parsed_document WHERE tenant_id=$1 AND version_id=$2 AND parser_version=$3',[row.tenant_id,row.version_id,STRUCTURE_PARSER_VERSION])).rows[0];

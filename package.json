@@ -43,7 +43,8 @@
     "eval:fixture": "node --env-file-if-exists=.env scripts/evaluation/run.mjs --fixture --probes",
     "eval:review": "node scripts/evaluation/review.mjs",
     "test:evaluation": "node --env-file-if-exists=.env --test scripts/evaluation.integration.mjs",
-    "test:corrections": "node --env-file-if-exists=.env --test scripts/corrections.integration.mjs"
+    "test:corrections": "node --env-file-if-exists=.env --test scripts/corrections.integration.mjs",
+    "test:lifecycle": "node --env-file-if-exists=.env --test scripts/lifecycle.integration.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

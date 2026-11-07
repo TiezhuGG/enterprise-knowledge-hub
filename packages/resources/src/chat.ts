@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import type { ChatRun, ChatEvent, Conversation, IdentityContext, SearchInput, SearchEvidence, AnswerResponse, ResourcePage } from '@zhiheng/contracts';
+import {lifecyclePolicy} from './lifecycle-policy';
 import { AnswerStore } from './answers';
 import { transaction } from './database';
 import { fail, ResourceError } from './policy';
@@ -17,7 +18,7 @@ export class ChatStore extends AnswerStore {
     private async owner(client: PoolClient, member: IdentityContext, id: string, lock = false) { const row = (await client.query(`SELECT * FROM conversation WHERE tenant_id=$1 AND id=$2 AND member_id=$3 AND deleted_at IS NULL ${lock ? 'FOR UPDATE' : 'FOR SHARE'}`, [member.tenant_id, id, member.membership_id])).rows[0]; if (!row)
         fail(404, 'RESOURCE_UNAVAILABLE'); return row; }
     private async event(client: PoolClient, tenant: string, run: string, type: ChatEvent['type'], payload: object = {}) { const row = (await client.query('UPDATE chat_run SET last_event_id=last_event_id+1 WHERE tenant_id=$1 AND id=$2 RETURNING last_event_id', [tenant, run])).rows[0]; await client.query('INSERT INTO chat_event(tenant_id,run_id,seq,type,payload) VALUES($1,$2,$3,$4,$5)', [tenant, run, row.last_event_id, type, JSON.stringify(payload)]); }
-    private async terminal(client: PoolClient, row: any, status: 'failed' | 'cancelled', code: string) { if (row.status !== 'running')
+    protected async terminal(client: PoolClient, row: any, status: 'failed' | 'cancelled', code: string) { if (row.status !== 'running')
         return; await this.event(client, row.tenant_id, row.id, status === 'cancelled' ? 'run.cancelled' : 'run.failed', { error_code: code }); await client.query("UPDATE chat_run SET status=$3,stage='finished',error_code=$4,finished_at=now(),cancel_requested_at=CASE WHEN $3='cancelled' THEN now() ELSE cancel_requested_at END WHERE tenant_id=$1 AND id=$2 AND status='running'", [row.tenant_id, row.id, status, code]); }
     private async expire(client: PoolClient, tenant: string, member?: string) { const rows = await client.query("SELECT * FROM chat_run WHERE tenant_id=$1 AND ($2::uuid IS NULL OR member_id=$2) AND status='running' AND deadline_at<now() ORDER BY id FOR UPDATE", [tenant, member ?? null]); for (const row of rows.rows)
         await this.terminal(client, row, 'failed', 'EXECUTION_INTERRUPTED'); }
@@ -60,7 +61,7 @@ export class ChatStore extends AnswerStore {
                 for (const kb of [...input.kb_ids].sort())
                     await this.kb(c, m, kb, 'read');
             const id = randomUUID();
-            await c.query("INSERT INTO chat_run(tenant_id,id,conversation_id,member_id,question_message_id,message_id,parent_run_id,idempotency_hash,payload_hash,input,status,stage) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'running','queued')", [m.tenant_id, id, conversation, m.membership_id, randomUUID(), randomUUID(), parent ?? null, kh, ph, JSON.stringify(input)]);
+            await c.query("INSERT INTO chat_run(tenant_id,id,conversation_id,member_id,question_message_id,message_id,parent_run_id,idempotency_hash,payload_hash,input,status,stage,content_expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'running','queued',now()+($11::int*interval '1 day'))", [m.tenant_id, id, conversation, m.membership_id, randomUUID(), randomUUID(), parent ?? null, kh, ph, JSON.stringify(input),lifecyclePolicy().historyDays]);
             await this.event(c, m.tenant_id, id, 'run.started', { stage: 'queued' });
             return { id, fresh: true };
         });
@@ -71,8 +72,10 @@ export class ChatStore extends AnswerStore {
         }
         return this.chatRun(current, created.id);
     }
-    private async changeStage(current: IdentityContext, id: string, stage: string, dependencies?: SearchEvidence[]) { return this.run(current, async (c, m) => { const row = (await c.query('SELECT * FROM chat_run WHERE tenant_id=$1 AND id=$2 FOR UPDATE', [m.tenant_id, id])).rows[0]; if (!row || row.status !== 'running')
-        fail(409, 'RUN_TERMINAL'); await c.query('UPDATE chat_run SET stage=$3,dependencies=COALESCE($4::jsonb,dependencies) WHERE tenant_id=$1 AND id=$2', [m.tenant_id, id, stage, dependencies ? JSON.stringify(dependencies) : null]); await this.event(c, m.tenant_id, id, 'run.progress', { stage }); }); }
+    private async changeStage(current:IdentityContext,id:string,stage:string,dependencies?:SearchEvidence[]){
+      const update=async(c:PoolClient)=>{const row=(await c.query('SELECT * FROM chat_run WHERE tenant_id=$1 AND id=$2 FOR UPDATE',[current.tenant_id,id])).rows[0];if(!row||row.status!=='running')fail(409,'RUN_TERMINAL');await c.query('UPDATE chat_run SET stage=$3,dependencies=COALESCE($4::jsonb,dependencies) WHERE tenant_id=$1 AND id=$2',[current.tenant_id,id,stage,dependencies?JSON.stringify(dependencies):null]);await this.event(c,current.tenant_id,id,'run.progress',{stage})};
+      return dependencies?this.withEvidence(current,dependencies,(_,c)=>update(c)):this.run(current,c=>update(c));
+    }
     private async systemEnd(tenant: string, id: string, code: string) { return transaction(this.pool, async (c) => { const row = (await c.query('SELECT * FROM chat_run WHERE tenant_id=$1 AND id=$2 FOR UPDATE', [tenant, id])).rows[0]; if (row)
         await this.terminal(c, row, 'failed', code); }); }
     private async executeChat(current: IdentityContext, id: string, input: SearchInput, abort: AbortController) {
@@ -80,7 +83,7 @@ export class ChatStore extends AnswerStore {
         const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(95000)]);
         const monitor = setInterval(() => { if (checking)
             return; checking = true; void this.chatRun(current, id).then(async (run) => { if (run.status !== 'running') {
-            if (run.status === 'restricted')
+            if (run.status === 'restricted' || run.status === 'expired')
                 await this.systemEnd(current.tenant_id, id, 'ACCESS_CHANGED');
             abort.abort();
         } }).catch(async () => { await this.systemEnd(current.tenant_id, id, 'ACCESS_CHANGED').catch(() => { }); abort.abort(); }).finally(() => { checking = false; }); }, 300);
@@ -126,7 +129,8 @@ export class ChatStore extends AnswerStore {
         await this.run(current, (c, m) => this.expire(c, m.tenant_id, m.membership_id));
         const row = await this.run(current, async (c, m) => { const r = (await c.query('SELECT r.*,f.value AS feedback FROM chat_run r LEFT JOIN chat_feedback f ON f.tenant_id=r.tenant_id AND f.run_id=r.id AND f.member_id=r.member_id WHERE r.tenant_id=$1 AND r.id=$2 AND r.member_id=$3', [m.tenant_id, id, m.membership_id])).rows[0]; if (!r)
             fail(404, 'RESOURCE_UNAVAILABLE'); await this.owner(c, m, r.conversation_id); return r; });
-        const view = (answer: AnswerResponse | null, status: ChatRun['status'] = row.status): ChatRun => ({ id: row.id, conversation_id: row.conversation_id, question_message_id: row.question_message_id, message_id: row.message_id, parent_run_id: row.parent_run_id, question: row.input.query, status, stage: row.stage, last_event_id: row.last_event_id, answer, error_code: status === 'restricted' ? 'ACCESS_CHANGED' : row.error_code, feedback: row.feedback ?? null, created_at: row.created_at.toISOString(), events_url: `/api/v1/chat-runs/${id}/events`, status_url: `/api/v1/chat-runs/${id}`, cancel_url: `/api/v1/chat-runs/${id}/cancel` });
+        const view = (answer: AnswerResponse | null, status: ChatRun['status'] = row.status): ChatRun => ({ id: row.id, conversation_id: row.conversation_id, question_message_id: row.question_message_id, message_id: row.message_id, parent_run_id: row.parent_run_id, question: status==='expired'?'[历史内容已清理]':row.input.query, status, stage: row.stage, last_event_id: row.last_event_id, answer, error_code: status === 'restricted' ? 'ACCESS_CHANGED' : row.error_code, feedback: status==='expired'?null:row.feedback ?? null, created_at: row.created_at.toISOString(), events_url: `/api/v1/chat-runs/${id}/events`, status_url: `/api/v1/chat-runs/${id}`, cancel_url: `/api/v1/chat-runs/${id}/cancel` });
+        if(row.content_purged_at||row.content_expires_at.getTime()<=Date.now())return view(null,'expired');
         let sourceChecked = false;
         try {
             return await this.withEvidence(current, row.dependencies, async (fresh, c) => { sourceChecked = true; await this.owner(c, current, row.conversation_id); return view(row.result ? { ...row.result, sources: row.result.sources.map((s: SearchEvidence) => fresh.find(f => f.evidence_id === s.evidence_id)!) } : null); }, true);
@@ -145,15 +149,15 @@ export class ChatStore extends AnswerStore {
     async cancelChatRun(current: IdentityContext, id: string) { await this.run(current, async (c, m) => { const row = (await c.query('SELECT * FROM chat_run WHERE tenant_id=$1 AND id=$2 AND member_id=$3 FOR UPDATE', [m.tenant_id, id, m.membership_id])).rows[0]; if (!row)
         fail(404, 'RESOURCE_UNAVAILABLE'); await this.terminal(c, row, 'cancelled', 'USER_CANCELLED'); }); this.executions.get(id)?.abort.abort(); return this.chatRun(current, id); }
     async regenerateChatRun(current: IdentityContext, id: string, key: string) { const row = await this.run(current, async (c, m) => { const r = (await c.query('SELECT * FROM chat_run WHERE tenant_id=$1 AND id=$2 AND member_id=$3', [m.tenant_id, id, m.membership_id])).rows[0]; if (!r)
-        fail(404, 'RESOURCE_UNAVAILABLE'); return r; }); return this.createChatRun(current, row.conversation_id, row.input, key, id); }
+        fail(404, 'RESOURCE_UNAVAILABLE'); if(r.content_purged_at||r.content_expires_at.getTime()<=Date.now())fail(410,'HISTORY_EXPIRED');return r; }); return this.createChatRun(current, row.conversation_id, row.input, key, id); }
     async feedback(current: IdentityContext, id: string, value: 'helpful' | 'unhelpful') { const run = await this.chatRun(current, id); if (run.status !== 'completed' || !run.answer)
         fail(409, 'FEEDBACK_UNAVAILABLE'); await this.run(current, async (c, m) => { await this.owner(c, m, run.conversation_id); await c.query('INSERT INTO chat_feedback(tenant_id,run_id,member_id,value) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,run_id,member_id) DO UPDATE SET value=EXCLUDED.value,updated_at=now()', [m.tenant_id, id, m.membership_id, value]); }); return { value }; }
     async chatEvents(current: IdentityContext, id: string, after: number) {
         const run = await this.chatRun(current, id);
         if (after > run.last_event_id)
             fail(400, 'INVALID_EVENT_CURSOR');
-        if (run.status === 'restricted')
-            return { run, events: [], reset: false };
+        if (run.status === 'restricted' || run.status === 'expired')
+            return { run, events: [], reset: run.status==='expired' };
         if (Date.now() - Date.parse(run.created_at) > 86400000)
             return { run, events: [], reset: true };
         const dependencies = await this.run(current, async (c, m) => (await c.query('SELECT dependencies FROM chat_run WHERE tenant_id=$1 AND id=$2 AND member_id=$3', [m.tenant_id, id, m.membership_id])).rows[0]?.dependencies ?? []);

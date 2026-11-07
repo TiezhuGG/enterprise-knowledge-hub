@@ -19,6 +19,14 @@ export class ResourceStore {
   protected readonly pool;
   constructor(url?: string, schema = 'public', protected readonly cursorSecret = '') { this.pool = databasePool(url, schema); }
   close() { return this.pool?.end(); }
+  protected objectStorageIdentity():string|undefined{return undefined}
+  /** Register before I/O so cleanup can distinguish acknowledged writes from uncertain remote outcomes. */
+  protected async trackedWrite<T>(tenant:string,document:string,job:string|null,kind:string,write:()=>Promise<T>,guard?:(c:PoolClient)=>Promise<unknown>):Promise<T>{
+    const id=randomUUID();await transaction(this.pool,async c=>{const d=(await c.query('SELECT status FROM document WHERE tenant_id=$1 AND id=$2 FOR SHARE',[tenant,document])).rows[0];if(d?.status==='deleted'||(guard&&!await guard(c)))fail(409,'WRITE_FENCED');const route=this.objectStorageIdentity();if(route&&!['dense','embedding'].includes(kind)){const b=(await c.query('SELECT storage_key FROM object_binding WHERE tenant_id=$1 AND document_id=$2',[tenant,document])).rows[0];if(!b&&!d)await c.query('INSERT INTO object_binding(tenant_id,document_id,storage_key) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',[tenant,document,route])}await c.query("INSERT INTO storage_write(tenant_id,id,document_id,job_id,kind,status,storage_key) VALUES($1,$2,$3,$4,$5,'running',$6)",[tenant,id,document,job,kind,!['dense','embedding'].includes(kind)?route??null:null])});
+    try{const value=await write();await this.pool!.query("UPDATE storage_write SET status='settled',updated_at=now() WHERE tenant_id=$1 AND id=$2",[tenant,id]);return value}
+    catch(error){await this.pool!.query("UPDATE storage_write SET status=$3,updated_at=now() WHERE tenant_id=$1 AND id=$2",[tenant,id,kind==='embedding'?'settled':'unknown']).catch(()=>{});throw error}
+  }
+
   async identity(input: IdentityContext) { return transaction(this.pool, client => this.member(client, input)); }
   protected async member(client: PoolClient, input: IdentityContext): Promise<IdentityContext & { authz_version: number }> {
     const result = await client.query(`SELECT m.* FROM membership m JOIN tenant t ON t.id=m.tenant_id
