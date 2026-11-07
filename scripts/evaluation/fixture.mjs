@@ -1,0 +1,12 @@
+import http from 'node:http';import {setTimeout as delay} from 'node:timers/promises';import {once} from 'node:events';
+// Deliberately non-semantic: constant vectors and literal snippet selection, never a quality model.
+export async function modelFixtures(){
+ let behavior='normal',embeddingCalls=0,generationCalls=0;
+ const embed=http.createServer(async(req,res)=>{let raw='';for await(const c of req)raw+=c;const b=JSON.parse(raw);embeddingCalls++;res.end(JSON.stringify({model:b.model,revision:'protocol-v1',data:b.input.map((_,index)=>({index,embedding:[1,0,0,0]})),usage:{prompt_tokens:b.input.join('').length}}))}).listen(0,'127.0.0.1');await once(embed,'listening');
+ const generation=http.createServer(async(req,res)=>{let raw='';for await(const c of req)raw+=c;const b=JSON.parse(raw),context=JSON.parse(b.messages[1].content);generationCalls++;
+  if(behavior==='timeout'){await delay(500);if(res.destroyed)return}
+  let value=behavior==='insufficient'?{status:'insufficient',claims:[]}:behavior==='forged_id'?{status:'answered',claims:[{evidence_id:'E999',quote:'模型伪造的条款不应显示'}]}:{status:context.question.includes('两份')&&context.evidence.length>=2?'conflict':'answered',claims:context.evidence.slice(0,8).map(e=>({evidence_id:e.id,quote:e.excerpt.slice(0,600)}))};
+  res.end(JSON.stringify({model:b.model,revision:'protocol-v1',choices:[{finish_reason:'stop',message:{role:'assistant',content:JSON.stringify(value)}}],usage:{prompt_tokens:context.question.length,completion_tokens:JSON.stringify(value).length}}));
+ }).listen(0,'127.0.0.1');await once(generation,'listening');
+ return {config:{INDEX_ENABLED:'true',EMBEDDING_BASE_URL:`http://127.0.0.1:${embed.address().port}/v1`,EMBEDDING_MODEL:'constant-vector-protocol-fixture',EMBEDDING_REVISION:'protocol-v1',EMBEDDING_DIMENSION:'4',EMBEDDING_PROCESSING:'fixture-only',EMBEDDING_QUERY_PREFIX:'',EMBEDDING_DOCUMENT_PREFIX:'',GENERATION_ENABLED:'true',GENERATION_BASE_URL:`http://127.0.0.1:${generation.address().port}/v1`,GENERATION_MODEL:'literal-protocol-fixture',GENERATION_REVISION:'protocol-v1',GENERATION_TIMEOUT_MS:'300',EMBEDDING_TIMEOUT_MS:'3000'},set behavior(value){behavior=value},get counts(){return {embedding:embeddingCalls,generation:generationCalls}},async close(){for(const server of [embed,generation]){server.closeAllConnections();await new Promise(r=>server.close(r))}}};
+}

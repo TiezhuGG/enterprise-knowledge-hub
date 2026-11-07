@@ -38,7 +38,11 @@
     "test:retrieval": "node --env-file-if-exists=.env --test scripts/retrieval.integration.mjs",
     "index:warm": "node --env-file-if-exists=.env scripts/warm-index.mjs",
     "test:answers": "node --env-file-if-exists=.env --test scripts/answers.integration.mjs",
-    "test:chat": "node --env-file-if-exists=.env --test scripts/chat.integration.mjs"
+    "test:chat": "node --env-file-if-exists=.env --test scripts/chat.integration.mjs",
+    "eval:baseline": "node --env-file-if-exists=.env scripts/evaluation/run.mjs",
+    "eval:fixture": "node --env-file-if-exists=.env scripts/evaluation/run.mjs --fixture --probes",
+    "eval:review": "node scripts/evaluation/review.mjs",
+    "test:evaluation": "node --env-file-if-exists=.env --test scripts/evaluation.integration.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
