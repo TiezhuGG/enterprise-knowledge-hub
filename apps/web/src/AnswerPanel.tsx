@@ -1,5 +1,6 @@
+import {CorrectionsPanel} from './CorrectionsPanel';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Input, Select, Space, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Input, Modal, Select, Space, Tag, Typography } from 'antd';
 import type { ChatRun, Conversation, ResourcePage, SearchEvidence, SessionInfo, ChatEvent } from '@zhiheng/contracts';
 import { applyChatEvent, liveChat, stageLabel, type LiveChat } from './chat-events';
 const terminal = (r: ChatRun) => r.status !== 'running';
@@ -8,6 +9,7 @@ export function AnswerPanel({ session, onExpired }: {
     onExpired: () => void;
 }) {
     const scope = `zhiheng.chat:${session.identity.tenant_id}:${session.identity.membership_id}`;
+    const [correctionSource,setCorrectionSource]=useState<SearchEvidence|null>(null);
     const [question, setQuestion] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [conversations, setConversations] = useState<Conversation[]>([]), [selected, setSelected] = useState(''), [runs, setRuns] = useState<ChatRun[]>([]), [live, setLive] = useState<LiveChat | null>(null), [connection, setConnection] = useState(''), [source, setSource] = useState<{
         evidence: SearchEvidence;
         quote: string;
@@ -223,11 +225,12 @@ export function AnswerPanel({ session, onExpired }: {
  {quotes.map(c => { const e = current?.sources[c.evidence_id] ?? run.answer?.sources.find(s => s.evidence_id === c.evidence_id); return e && <div key={c.index}><blockquote className="parsed-text">{c.quote}</blockquote><Button type="link" onClick={() => void verify(run, e, c.quote)}>{c.evidence_id} · {e.title} · v{e.version_no} · 定位原文</Button></div>; })}
  <Space wrap>{run.status === 'running' && <Button disabled={busy} danger onClick={() => void cancel(run)}>停止本次回答</Button>}{terminal(run) && <Button disabled={busy || !!active} onClick={() => void regenerate(run)}>重新生成</Button>}{run.status === 'completed' && run.answer && <><Button aria-pressed={run.feedback === 'helpful'} onClick={() => void vote(run, 'helpful')}>有帮助{run.feedback === 'helpful' ? ' ✓' : ''}</Button><Button aria-pressed={run.feedback === 'unhelpful'} onClick={() => void vote(run, 'unhelpful')}>无帮助{run.feedback === 'unhelpful' ? ' ✓' : ''}</Button></>}</Space></Space></Card>;
         })}</div>
+ <Modal title="回答来源的问题反馈" open={!!correctionSource} onCancel={()=>setCorrectionSource(null)} footer={null} width={900} destroyOnHidden>{correctionSource&&<CorrectionsPanel key={correctionSource.chunk_id} documentId={correctionSource.document_id} versionId={correctionSource.version_id} blockId={correctionSource.spans[0]?.block_id} session={session} onExpired={onExpired}/>}</Modal>
  <Input.TextArea aria-label="问答问题" rows={3} maxLength={1200} value={question} disabled={busy || !!active || !!submission.current} onChange={e => { setQuestion(e.target.value); if (submission.current && submission.current.question !== e.target.value.trim())
         setError('上次提交尚未确认，请先恢复会话；重试将沿用原问题。'); }} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         void send();
     } }} placeholder="向企业资料提问，Ctrl+Enter 提交"/><Button type="primary" loading={busy} disabled={!question.trim() || !!active} onClick={() => void send()}>{submission.current ? '重试同次提交' : '发送问题'}</Button>
- {source && <div ref={sourcePanel} tabIndex={-1} aria-label="回答来源定位"><Card size="small" title="回答来源已核验"><Typography.Paragraph>{source.evidence.title} · v{source.evidence.version_no} · {source.evidence.heading_path.join(' / ')}</Typography.Paragraph><Typography.Paragraph>{source.evidence.spans.map(s => s.source.type === 'pdf' ? `第 ${s.source.page} 页` : s.source.type === 'text' ? `第 ${s.source.line_start}—${s.source.line_end} 行` : `Word段落 ${s.source.paragraph_index ?? '—'} / 表格 ${s.source.table_index ?? '—'}`).filter((v, i, a) => a.indexOf(v) === i).join(' · ')}</Typography.Paragraph><pre className="parsed-text">{(() => { const pos = source.evidence.snippet.indexOf(source.quote); return pos < 0 ? source.evidence.snippet : <>{source.evidence.snippet.slice(0, pos)}<mark>{source.quote}</mark>{source.evidence.snippet.slice(pos + source.quote.length)}</>; })()}</pre>{source.evidence.download_url && <Button href={source.evidence.download_url}>下载确切版本原文</Button>}</Card></div>}
+ {source && <div ref={sourcePanel} tabIndex={-1} aria-label="回答来源定位"><Card size="small" title="回答来源已核验"><Button onClick={()=>setCorrectionSource(source.evidence)}>报告这条来源的问题</Button><Typography.Paragraph>{source.evidence.title} · v{source.evidence.version_no} · {source.evidence.heading_path.join(' / ')}</Typography.Paragraph><Typography.Paragraph>{source.evidence.spans.map(s => s.source.type === 'pdf' ? `第 ${s.source.page} 页` : s.source.type === 'text' ? `第 ${s.source.line_start}—${s.source.line_end} 行` : `Word段落 ${s.source.paragraph_index ?? '—'} / 表格 ${s.source.table_index ?? '—'}`).filter((v, i, a) => a.indexOf(v) === i).join(' · ')}</Typography.Paragraph><pre className="parsed-text">{(() => { const pos = source.evidence.snippet.indexOf(source.quote); return pos < 0 ? source.evidence.snippet : <>{source.evidence.snippet.slice(0, pos)}<mark>{source.quote}</mark>{source.evidence.snippet.slice(pos + source.quote.length)}</>; })()}</pre>{source.evidence.download_url && <Button href={source.evidence.download_url}>下载确切版本原文</Button>}</Card></div>}
  </Space></Card>;
 }

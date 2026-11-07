@@ -1,11 +1,12 @@
-import {useEffect,useState} from 'react';import {Alert,Button,Card,Descriptions,Space,Tag,Typography} from 'antd';
+import {useEffect,useRef,useState} from 'react';import {Alert,Button,Card,Descriptions,Space,Tag,Typography} from 'antd';
 import type {DenseGenerationView,DocumentVersion,SessionInfo} from '@zhiheng/contracts';
 export function IndexPanel({documentId,version,session,canWrite,onExpired}:{documentId:string;version:DocumentVersion;session:SessionInfo;canWrite:boolean;onExpired:()=>void}){
+ const pendingKey=useRef<string|null>(null);
  const [rows,setRows]=useState<DenseGenerationView[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const path=`/api/v1/documents/${documentId}/versions/${version.id}/index-generations`;
  async function load(){setError('');try{const r=await fetch(path,{signal:AbortSignal.timeout(10000)});if(!r.ok){if(r.status===401)onExpired();throw new Error(r.status===404?'内容不可用或无权访问。':'索引状态暂时不可用。')}setRows((await r.json()).data)}catch(e){setRows([]);setError(e instanceof Error?e.message:'读取失败。')}}
  useEffect(()=>{void load()},[version.id]);
- async function rebuild(){setBusy(true);setError('');try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrf_token,'Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({reverify:true}),signal:AbortSignal.timeout(10000)});if(!r.ok){if(r.status===401)onExpired();throw new Error(r.status===409?'任务正在运行、已取消或尚未分块，请查看处理任务。':r.status===503?'索引服务尚未配置，请联系维护者。':'当前无法重建索引，请检查权限与服务配置。')}await load()}catch(e){setError(e instanceof Error?e.message:'操作失败。')}finally{setBusy(false)}}
+ async function rebuild(){setBusy(true);setError('');try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrf_token,'Idempotency-Key':pendingKey.current??(pendingKey.current=crypto.randomUUID())},body:JSON.stringify({reverify:true}),signal:AbortSignal.timeout(10000)});if(!r.ok){if(r.status===401)onExpired();throw new Error(r.status===409?'任务正在运行、已取消或尚未分块，请查看处理任务。':r.status===503?'索引服务尚未配置，请联系维护者。':'当前无法重建索引，请检查权限与服务配置。')}pendingKey.current=null;await load()}catch(e){setError(e instanceof Error?e.message:'操作失败。')}finally{setBusy(false)}}
  return <Space direction="vertical" size="middle" style={{width:'100%'}}><Typography.Text>{version.filename} · v{version.version_no}</Typography.Text><Alert type="info" showIcon message="向量索引是派生产物，索引就绪不代表已发布。" description="模型或维度变更会创建独立代际；读取与后续检索仍须核对当前版本和权限。"/>
  <Space wrap><Button disabled={busy} onClick={()=>void load()}>刷新索引状态</Button>{canWrite&&<Button loading={busy} onClick={()=>void rebuild()}>重新校验并构建索引</Button>}</Space>
  {error&&<Alert type="error" role="alert" showIcon message={error}/>}{!rows.length&&!error&&<Alert type="warning" showIcon message="尚无索引代际，请查看处理任务与模型配置。"/>}

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import {jobGuidance} from './job-guidance';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Empty, List, Modal, Space, Tag, Typography } from 'antd';
 import type { IngestionDetails, IngestionJob, KnowledgeDocument, ResourcePage, SessionInfo } from '@zhiheng/contracts';
 const labels={queued:'排队中',running:'处理中',retry_wait:'等待重试',waiting_dependency:'等待解析服务',succeeded:'处理完成',failed:'失败',cancelled:'已取消'};
@@ -6,6 +7,7 @@ const reasons:Record<string,string>={EMBEDDING_UNAVAILABLE:'嵌入服务暂时�
 const retryable=new Set(['SOURCE_UNAVAILABLE','LEASE_EXPIRED','WORKER_ERROR','WORKER_DEADLINE','ACCESS_REVOKED','PARSE_TIMEOUT','PARSE_RESOURCE_LIMIT','PARSER_START_FAILED','PARSER_FAILED','CHUNK_TIMEOUT','EMBEDDING_UNAVAILABLE','EMBEDDING_AUTH_FAILED','EMBEDDING_RATE_LIMIT','EMBEDDING_BUSY','VECTOR_STORE_UNAVAILABLE','VECTOR_VERIFICATION_FAILED','INDEX_PROFILE_UNAVAILABLE']);
 const date=(value:string)=>new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'});
 export function JobsPanel({document,session,onExpired}:{document:KnowledgeDocument;session:SessionInfo;onExpired:()=>void}){
+  const operationKeys=useRef(new Map<string,string>());
   const [rows,setRows]=useState<IngestionJob[]>([]),[next,setNext]=useState<string|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[details,setDetails]=useState<IngestionDetails|null>(null);
   async function request(path:string,init:RequestInit={}){
     const response=await fetch(`/api/v1${path}`,{...init,signal:AbortSignal.timeout(8000),headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrf_token,...init.headers}});
@@ -19,7 +21,7 @@ export function JobsPanel({document,session,onExpired}:{document:KnowledgeDocume
   },[document.id,onExpired]);
   async function show(job:IngestionJob){try{setDetails((await(await request(`/jobs/${job.id}`)).json()).data);setError('')}catch(cause){setError(cause instanceof Error?cause.message:'详情读取失败。')}}
   async function act(job:IngestionJob,action:'retry'|'cancel'){
-    setBusy(true);setError('');try{await request(`/jobs/${job.id}/${action}`,{method:'POST',headers:{'Idempotency-Key':crypto.randomUUID()},body:'{}'});setDetails(null);await refresh()}catch(cause){setError(cause instanceof Error?cause.message:'操作未完成，请重试。')}finally{setBusy(false)}
+    setBusy(true);setError('');const identity=`${job.id}:${action}`,key=operationKeys.current.get(identity)??crypto.randomUUID();operationKeys.current.set(identity,key);try{await request(`/jobs/${job.id}/${action}`,{method:'POST',headers:{'Idempotency-Key':key},body:'{}'});operationKeys.current.delete(identity);setDetails(null);await refresh()}catch(cause){setError(cause instanceof Error?cause.message:'操作未完成，请重试。')}finally{setBusy(false)}
   }
   return <Card title="处理任务" size="small">
     {error&&<Alert type="error" role="alert" showIcon message={error}/>}
@@ -27,7 +29,7 @@ export function JobsPanel({document,session,onExpired}:{document:KnowledgeDocume
       <Button key="details" disabled={busy} onClick={()=>void show(job)}>任务详情</Button>,
       ...(job.status==='failed'&&retryable.has(job.error_code??'')&&document.capabilities.includes('write')?[<Button key="retry" disabled={busy} onClick={()=>void act(job,'retry')}>重试任务</Button>]:[]),
       ...(!['succeeded','failed','cancelled'].includes(job.status)&&document.capabilities.some(a=>['write','manage'].includes(a))?[<Button key="cancel" disabled={busy} onClick={()=>void act(job,'cancel')}>取消处理</Button>]:[]),
-    ]}><List.Item.Meta title={<Space wrap>{`版本 v${job.version_no}`}<Tag>{job.stage==='awaiting_publication'?'索引就绪，待发布':job.stage==='awaiting_indexer'?'分块完成，等待索引':job.stage==='awaiting_chunker'?'解析完成，等待分块':labels[job.status]}</Tag>{job.cancel_requested&&job.status==='running'&&<Tag>正在取消</Tag>}</Space>} description={<Space direction="vertical"><span>{job.cancel_requested&&job.status==='running'?'正在停止后续处理。':job.error_code?reasons[job.error_code]??'处理遇到问题，请查看任务记录并联系维护者。':job.status==='running'?(job.stage==='indexing'?'正在批量向量化并校验索引。':job.stage==='chunking'?'正在按结构分块并绑定来源。':job.stage==='parsing'?'正在解析文档并保留结构。':'正在校验原文件。'):'等待可用的处理资源。'}</span><span>{`本轮尝试 ${job.attempt_count}/${job.max_attempts} · 累计执行 ${job.total_attempts} 次`}</span>{job.status==='retry_wait'&&job.next_run_at&&<span>下次重试：{date(job.next_run_at)}（北京时间）</span>}</Space>}/></List.Item>}/>
+    ]}><List.Item.Meta title={<Space wrap>{`版本 v${job.version_no}`}<Tag>{job.stage==='awaiting_publication'?'索引就绪，待发布':job.stage==='awaiting_indexer'?'分块完成，等待索引':job.stage==='awaiting_chunker'?'解析完成，等待分块':labels[job.status]}</Tag>{job.cancel_requested&&job.status==='running'&&<Tag>正在取消</Tag>}</Space>} description={<Space direction="vertical"><Typography.Text strong>{jobGuidance(job).label}</Typography.Text><Typography.Text type="secondary">{jobGuidance(job).instruction}</Typography.Text><span>{job.cancel_requested&&job.status==='running'?'正在停止后续处理。':job.error_code?reasons[job.error_code]??'处理遇到问题，请查看任务记录并联系维护者。':job.status==='running'?(job.stage==='indexing'?'正在批量向量化并校验索引。':job.stage==='chunking'?'正在按结构分块并绑定来源。':job.stage==='parsing'?'正在解析文档并保留结构。':'正在校验原文件。'):'等待可用的处理资源。'}</span><span>{`本轮尝试 ${job.attempt_count}/${job.max_attempts} · 累计执行 ${job.total_attempts} 次`}</span>{job.status==='retry_wait'&&job.next_run_at&&<span>下次重试：{date(job.next_run_at)}（北京时间）</span>}</Space>}/></List.Item>}/>
     {next&&<Button disabled={busy} onClick={()=>void load(next).catch(()=>setError('更多任务加载失败。'))}>加载更多任务</Button>}
     <Modal title="任务执行记录" open={!!details} footer={null} onCancel={()=>setDetails(null)} destroyOnHidden>
       {details&&<><Typography.Paragraph>{`版本 v${details.version_no} · ${details.stage==='awaiting_publication'?'索引就绪，待发布':details.stage==='awaiting_indexer'?'分块完成，等待索引':details.stage==='awaiting_chunker'?'解析完成，等待分块':labels[details.status]} · 第 ${details.run_no} 轮`}</Typography.Paragraph>

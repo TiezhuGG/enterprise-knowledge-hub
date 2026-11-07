@@ -41,7 +41,8 @@ export class IngestionStore extends UploadStore {
       AND ($7::timestamptz IS NULL OR (created_at,id)<($7,$8::uuid)) ORDER BY created_at DESC,id DESC LIMIT $9`,[member.tenant_id,member.membership_id,ROLE_ACTIONS[member.role],input.status??null,input.kb_id??null,input.document_id??null,after?.[0]??null,after?.[1]??null,input.limit+1]);
     return this.page(result.rows.map(row=>this.view(row)),input,scope);
   });}
-  operateJob(current:IdentityContext,id:string,action:'retry'|'cancel',key:string,payloadHash:string,requestId:string){return this.run(current,async(client,member)=>{
+  operateJob(current:IdentityContext,id:string,action:'retry'|'cancel',key:string,payloadHash:string,requestId:string){return this.run(current,(client,member)=>this.operateJobInTransaction(client,member,id,action,key,payloadHash,requestId))}
+  protected async operateJobInTransaction(client:PoolClient,member:IdentityContext,id:string,action:'retry'|'cancel',key:string,payloadHash:string,requestId:string){
     const row=await this.access(client,member,id,action);const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;const keyHash=sha256(Buffer.from(key));
     const old=await client.query('SELECT payload_hash FROM ingestion_operation WHERE tenant_id=$1 AND job_id=$2 AND member_id=$3 AND action=$4 AND key_hash=$5',[member.tenant_id,id,member.membership_id,action,keyHash]);
     if(old.rowCount){if(old.rows[0].payload_hash!==payloadHash)fail(409,'IDEMPOTENCY_KEY_REUSED');return this.view(row)}
@@ -56,7 +57,7 @@ export class IngestionStore extends UploadStore {
     }
     await client.query('INSERT INTO ingestion_operation(tenant_id,job_id,member_id,action,key_hash,payload_hash,run_no) VALUES($1,$2,$3,$4,$5,$6,$7)',[member.tenant_id,id,member.membership_id,action,keyHash,payloadHash,updated.run_no]);
     await this.audit(client,member,id,`ingestion.${action}`,requestId);return this.view(updated);
-  });}
+  }
   protected async executor(client:PoolClient,row:any){
     const result=await client.query('SELECT actor_id FROM membership WHERE tenant_id=$1 AND id=$2',[row.tenant_id,row.executor_id]);if(!result.rows[0])fail(401,'MEMBERSHIP_INACTIVE');
     const current=await this.member(client,{actor_id:result.rows[0].actor_id,tenant_id:row.tenant_id,membership_id:row.executor_id,role:'employee',capabilities:[],provider:'development'});

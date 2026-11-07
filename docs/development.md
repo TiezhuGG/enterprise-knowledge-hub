@@ -91,3 +91,5 @@ P1-10 本地生成配置、原文摘录与拒答规则见 [问答说明](p1-10-g
 P1-11 会话、SSE恢复与停止见 [流式问答说明](p1-11-streaming-chat.md)。先执行 `npm run db:migrate` 创建聊天表；集成测试 `npm run test:chat` 共用索引测试Python环境。页面使用持久chat-runs接口；模型服务依旧默认关闭。
 
 P1-12 冻结样本与评测流程见 [评测说明](p1-12-baseline-evaluation.md)。构建后用 `npm run eval:fixture` 显式演练协议；`npm run eval:baseline` 默认真模型，未配置时退出2，不自动降级。回归：`npm run test:evaluation`；新结果保存在Git忽略的work/evaluations目录。
+
+P1-13 问题反馈、任务恢复和版本纠错见 [人工纠错说明](p1-13-knowledge-corrections.md)。执行 `npm run db:migrate` 增加私有纠错/审计表；回归 `npm run test:corrections` 共用索引测试Python环境。纠错接口不会代替安全扫描或直接发布修订。

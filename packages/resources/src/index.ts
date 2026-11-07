@@ -18,3 +18,5 @@ export {AnswerStore} from './answers';
 export {generationProfile,generate,validateClaims,GenerationFailure} from './generation';
 
 export {ChatStore} from './chat';
+
+export {CorrectionStore,correctionEtag} from './corrections';

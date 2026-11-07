@@ -136,3 +136,15 @@ export interface ChatRun {
  events_url:string;status_url:string;cancel_url:string;
 }
 export interface ChatEvent {run_id:string;seq:number;type:'run.started'|'run.progress'|'citation.upsert'|'answer.delta'|'run.completed'|'run.failed'|'run.cancelled';stage?:ChatStage;source?:SearchEvidence;claim_index?:number;evidence_id?:string;delta?:string;message_id?:string;error_code?:string|null}
+
+export type CorrectionKind='source_content'|'extraction'|'processing';
+export type CorrectionStatus='open'|'in_progress'|'awaiting_validation'|'resolved'|'dismissed';
+export type CorrectionAction='claim'|'verify'|'retry'|'submit_fix'|'resolve'|'dismiss'|'reopen';
+export interface CorrectionCase {
+ id:string;document_id:string;version_id:string;version_no:number;kind:CorrectionKind;description:string;block_id:string|null;
+ status:CorrectionStatus;row_version:number;can_manage:boolean;assigned:boolean;assignee_id:string|null;
+ verified_at:string|null;verification_note:string|null;verified_sha256:string|null;
+ replacement_version_id:string|null;resolution_note:string|null;closure_evidence:Record<string,unknown>|null;
+ created_at:string;updated_at:string;
+}
+export interface CorrectionDetails extends CorrectionCase {events:Array<{seq:number;action:string;status:string;note:string|null;member_id:string|null;created_at:string}>}

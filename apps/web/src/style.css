@@ -26,3 +26,6 @@ section { max-width: 720px; padding: 80px 0; }
 .chat-message { margin-bottom: 12px; }
 .chat-message .ant-card-head-title { white-space: normal; overflow-wrap: anywhere; }
 .chat-message .ant-btn-link { height: auto; white-space: normal; text-align: start; overflow-wrap: anywhere; padding-inline: 0; }
+
+.knowledge-list .ant-list-item-meta-title, .correction-panel { overflow-wrap: anywhere; }
+.correction-panel .ant-space-item { min-width: 0; max-width: 100%; }
