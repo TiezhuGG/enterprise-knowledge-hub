@@ -10,7 +10,7 @@ export function ChunkPanel({documentId,version,onExpired,onSource}:{documentId:s
  return <Space direction="vertical" size="middle" style={{width:'100%'}}>
   <Space wrap><Typography.Text>{version.filename} · v{version.version_no}</Typography.Text><Button disabled={busy} onClick={()=>void load()}>重新加载分块</Button></Space>
   {error&&<Alert type="error" role="alert" showIcon message={error}/>}
-  {preview&&<><Alert type="info" showIcon message={`已生成 ${preview.total_chunks} 个片段 · 等待向量索引`} description={`精确重复片段占比 ${(preview.result.metrics.duplicate_ratio*100).toFixed(1)}% · 正文重叠 ${preview.result.metrics.overlap_characters} 字符。重复片段保留各自来源；当前结果尚不可检索或发布。`}/>
+  {preview&&<><Alert type="info" showIcon message={`已生成 ${preview.total_chunks} 个片段`} description={`精确重复片段占比 ${(preview.result.metrics.duplicate_ratio*100).toFixed(1)}% · 正文重叠 ${preview.result.metrics.overlap_characters} 字符。重复片段保留各自来源；索引与发布状态请查看处理任务。`}/>
    <Typography.Paragraph type="secondary">按章节和段落分块，含章节提示的检索文本最多 {preview.result.policy.max_characters} 字符；长段落重叠约 {preview.result.policy.overlap_characters} 字符，表格分段重复表头。</Typography.Paragraph>
    {!!preview.result.source_warnings.length&&<Alert type="warning" showIcon message={`原文有 ${preview.result.source_warnings.length} 项解析提示，请结合结构原文核验。`}/>}
    {!!preview.result.warnings.length&&<Alert type="warning" showIcon message="分块质量提示" description={[...new Set(preview.result.warnings.map(w=>warnings[w.code]??'存在需要核验的分块结构。'))].join(' ')}/>}

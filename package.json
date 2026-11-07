@@ -32,7 +32,9 @@
     "test:ingestion": "node --env-file-if-exists=.env --test scripts/ingestion.integration.mjs",
     "test:parsing": "node --env-file-if-exists=.env --test scripts/parsing.integration.mjs",
     "test:chunking": "node --env-file-if-exists=.env --test scripts/chunking.integration.mjs",
-    "compare:chunks": "node scripts/compare-chunks.mjs"
+    "compare:chunks": "node scripts/compare-chunks.mjs",
+    "test:indexing": "node --env-file-if-exists=.env --test scripts/indexing.integration.mjs",
+    "validate:embedding": "node --env-file-if-exists=.env scripts/validate-local-embedding.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

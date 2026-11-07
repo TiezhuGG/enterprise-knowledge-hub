@@ -81,3 +81,5 @@ npm run smoke:queue
 P1-06 完整链路测试：`npm run test:parsing`；需要 PostgreSQL、Redis 和开发 S3，使用独立测试命名空间。
 
 P1-07 完整链路：`npm run test:chunking`；策略样本对比：`npm run compare:chunks`。
+
+P1-08 索引接入与本地CPU模型配置见 [索引说明](p1-08-embedding-and-index.md)。测试：`npm run test:indexing`（需 requirements-dev-index.txt）；真实模型验收：`npm run validate:embedding -- --write`（需实际模型就绪）。

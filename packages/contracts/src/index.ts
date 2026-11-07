@@ -101,3 +101,9 @@ export interface ChunkSet {
  metrics:{chunks:number;exact_duplicate_chunks:number;duplicate_ratio:number;overlap_characters:number;repeated_table_header_characters:number;retrieval_characters:number;max_chunk_characters:number;excluded_header_footer_blocks:number};
 }
 export interface ChunkPreview {document_id:string;version_id:string;result:ChunkSet;total_chunks:number;page:{next_cursor:string|null;has_more:boolean}}
+
+export interface DenseGenerationView {
+ id:string;version_id:string;generation_no:number;profile_hash:string;model:string;revision:string;dimension:number;processing:string;
+ status:'building'|'ready'|'failed'|'cancelled';chunk_count:number;indexed_count:number;cache_hits:number;provider_inputs:number;tokens:string|null;
+ required_artifacts:['dense'];created_at:string;ready_at:string|null;
+}

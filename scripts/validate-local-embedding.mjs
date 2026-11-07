@@ -1,0 +1,14 @@
+import {createRequire} from 'node:module';import {randomUUID} from 'node:crypto';import {writeFile} from 'node:fs/promises';
+const require=createRequire(new URL('../packages/resources/package.json',import.meta.url)),{embeddingProfile,embed,embedQuery,DenseIndex}=require('./dist');
+const profile=embeddingProfile();if(!profile)throw new Error('Enable INDEX_ENABLED and configure the pinned local model first');if(!['127.0.0.1','localhost','[::1]'].includes(new URL(profile.endpoint).hostname))throw new Error('This acceptance script only sends fictional samples to a local runner');
+const meta=await(await fetch(profile.endpoint.replace(/\/v1$/,'')+'/metadata',{signal:AbortSignal.timeout(5000)})).json();if(meta.revision!==profile.revision||meta.dimension!==profile.dimension||meta.processing!==profile.processing)throw new Error('Local model metadata differs from frozen profile');
+const tenant=randomUUID(),generation=randomUUID(),dense=new DenseIndex(profile),documents=['员工出差的交通费与住宿费按公司制度报销。','ZX-2400支持12伏直流供电，串口为RS-485。','ZX-2401使用24伏直流电源，支持以太网。','会议室预订须至少提前一天申请。'];
+try{
+ await dense.ensure();const vectors=await embed(profile,documents,randomUUID());await dense.write(documents.map((text,i)=>({id:randomUUID(),tenant_id:tenant,kb_id:tenant,document_id:tenant,version_id:tenant,generation_id:generation,chunk_id:String(i),model_space:profile.hash,retrieval_sha256:String(i).padStart(64,'0'),policy_bucket_ids:'[]',active_hint:false,vector:vectors.vectors[i]})));
+ const questions=['差旅费怎么报销？','出差报销需要遵守什么？','ZX-2400 的供电电压和接口是什么？'],results=[];
+ for(const question of questions){const v=await embedQuery(profile,question,profile.hash),result=await dense.search(tenant,generation,profile.hash,v,3);results.push({question,hits:result.results.map(r=>({document:documents[Number(r.chunk_id)],score:r.score}))})}
+ const long='报销凭证和审批记录应按照制度保存，必须核对业务真实性。'.repeat(80).slice(0,1200),length=await embed(profile,[long],randomUUID());if(length.tokens===null||length.tokens<=512)throw new Error('Expected long-input token-window coverage');
+ const record={model:profile.model,revision:profile.revision,upstream_revision:meta.upstream_revision,dimension:profile.dimension,processing:profile.processing,profile_hash:profile.hash,long_input_characters:long.length,long_input_tokens:length.tokens,results};
+ const report=`# P1-08 本地模型实测\n\n仅使用虚构样本文本，本地CPU推理和真实Milvus读写；以下分数不是企业语料准确率。\n\n\`\`\`json\n${JSON.stringify(record,null,2)}\n\`\`\`\n\n型号精确匹配仍需后续词法检索/重排验证，不能由向量近似相似度替代。\n`;
+ if(process.argv.includes('--write'))await writeFile(new URL('../docs/p1-08-local-model-validation.md',import.meta.url),report);process.stdout.write(report);
+}finally{try{await dense.client.delete({collection_name:dense.collection,filter:`tenant_id == ${JSON.stringify(tenant)} && generation_id == ${JSON.stringify(generation)}`})}finally{dense.close()}}

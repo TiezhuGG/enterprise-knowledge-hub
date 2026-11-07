@@ -1,3 +1,4 @@
+import { IndexPanel } from './IndexPanel';
 import { ChunkPanel } from './ChunkPanel';
 import { useEffect, useRef, useState } from 'react';
 import { ParsedPanel } from './ParsedPanel';
@@ -8,6 +9,7 @@ import type { DocumentVersion, FinalizedUpload, KnowledgeBase, KnowledgeDocument
 const failure=(status:number)=>status===404?'内容不可用或无权访问。':status===401?'登录已失效，请重新登录。':status===410?'上传票据已过期，请重新上传。':status===413?'文件超过当前上传大小限制。':status===415?'文件格式或实际内容不受支持，请使用 UTF-8 TXT、Markdown、PDF 或 DOCX。':status===422?'文件大小或校验值不一致，请重新选择文件。':status===409?'文档或上传状态已变化，请刷新并确认目标后重试。':status===429?'上传额度或并发已达上限，请稍后重试。':'服务暂时不可用，请重试。';
 interface Attempt {fingerprint:string;key:string;ticket?:UploadTicket;finalizeKey:string}
 export function DocumentsPanel({kb,session,onExpired}:{kb:KnowledgeBase;session:SessionInfo;onExpired:()=>void}) {
+  const [indexVersion,setIndexVersion]=useState<DocumentVersion|null>(null);
   const [chunkVersion,setChunkVersion]=useState<DocumentVersion|null>(null),[focusBlockId,setFocusBlockId]=useState<string|undefined>();
   const [parsedVersion,setParsedVersion]=useState<DocumentVersion|null>(null);
   const [documents,setDocuments]=useState<KnowledgeDocument[]>([]),[next,setNext]=useState<string|null>(null);
@@ -68,10 +70,11 @@ export function DocumentsPanel({kb,session,onExpired}:{kb:KnowledgeBase;session:
     {next&&<Button disabled={busy} onClick={()=>void load(next).catch(()=>setError('文档加载失败，请重试。'))}>加载更多文档</Button>}
     {viewing&&viewing.capabilities.some(action=>['write','manage'].includes(action))&&<JobsPanel key={viewing.id} document={viewing} session={session} onExpired={onExpired}/>}
     {viewing&&<Card size="small" title={`${viewing.title} · 版本`}>
-      <List className="knowledge-list" dataSource={versions} locale={{emptyText:'暂无可见版本'}} renderItem={version=><List.Item actions={[<Button key="chunks" onClick={()=>setChunkVersion(version)}>分块预览</Button>,<Button key="parsed" onClick={()=>{setFocusBlockId(undefined);setParsedVersion(version)}}>解析预览</Button>,...(viewing.capabilities.includes('download')?[<Button key="download" href={`/api/v1/documents/${viewing.id}/versions/${version.id}/content`}>下载原文件</Button>]:[])]}>
+      <List className="knowledge-list" dataSource={versions} locale={{emptyText:'暂无可见版本'}} renderItem={version=><List.Item actions={[<Button key="index" onClick={()=>setIndexVersion(version)}>索引详情</Button>,<Button key="chunks" onClick={()=>setChunkVersion(version)}>分块预览</Button>,<Button key="parsed" onClick={()=>{setFocusBlockId(undefined);setParsedVersion(version)}}>解析预览</Button>,...(viewing.capabilities.includes('download')?[<Button key="download" href={`/api/v1/documents/${viewing.id}/versions/${version.id}/content`}>下载原文件</Button>]:[])]}>
         <List.Item.Meta title={<Space wrap>{`v${version.version_no}`}{version.is_latest&&<Tag>最新上传</Tag>}{version.is_published&&<Tag>已发布</Tag>}</Space>} description={`${version.filename} · ${version.size} 字节 · ${version.scan_status==='pending'?'安全检查待完成':version.scan_status==='clean'?'安全检查通过':'已拒绝'}`}/>
       </List.Item>}/>{versionNext&&<Button onClick={()=>void showVersions(viewing,versionNext)}>加载更多版本</Button>}
     </Card>}
+    <Modal title="向量索引与模型版本" open={!!indexVersion} onCancel={()=>setIndexVersion(null)} footer={null} width={800} destroyOnHidden>{viewing&&indexVersion&&<IndexPanel key={indexVersion.id} documentId={viewing.id} version={indexVersion} session={session} canWrite={viewing.capabilities.includes('write')} onExpired={onExpired}/>}</Modal>
     <Modal title="分块与来源核验" open={!!chunkVersion} onCancel={()=>setChunkVersion(null)} footer={null} width={900} destroyOnHidden>{viewing&&chunkVersion&&<ChunkPanel key={chunkVersion.id} documentId={viewing.id} version={chunkVersion} onExpired={onExpired} onSource={blockId=>{setFocusBlockId(blockId);setParsedVersion(chunkVersion);setChunkVersion(null)}}/>}</Modal>
     <Modal title="文档结构与原文定位" open={!!parsedVersion} onCancel={()=>setParsedVersion(null)} footer={null} width={900} destroyOnHidden>{viewing&&parsedVersion&&<ParsedPanel key={`${parsedVersion.id}:${focusBlockId??"all"}`} focusBlockId={focusBlockId} documentId={viewing.id} version={parsedVersion} allowDownload={viewing.capabilities.includes('download')} session={session} onExpired={onExpired}/>}</Modal>
   </Space>;

@@ -20,7 +20,9 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: requirements-dev-storage.txt
+          cache-dependency-path: |
+            requirements-dev-storage.txt
+            requirements-dev-index.txt
       - run: python -m pip install -r requirements-dev-storage.txt
       - name: Start development S3 protocol service
         run: |
@@ -32,6 +34,8 @@ jobs:
       - run: npm run test:ingestion
       - run: npm run test:parsing
       - run: npm run test:chunking
+      - run: python -m pip install -r requirements-dev-index.txt
+      - run: npm run test:indexing
       - name: Worker queue and independent restart
         run: |
           node --env-file=.env apps/worker/dist/main.js > /tmp/worker.log 2>&1 &

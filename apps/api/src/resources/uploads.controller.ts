@@ -55,6 +55,10 @@ export class VersionsController {
   chunks(@Req() req:AuthRequest,@Param('documentId') doc:string,@Param('versionId') version:string,@Query() raw:unknown){object(raw,['limit','cursor']);return this.store.listChunks(req.identity!,id(doc),id(version),listInput(raw)).then(data=>({data}));}
   @Get(':versionId/chunks/:chunkId')
   chunk(@Req() req:AuthRequest,@Param('documentId') doc:string,@Param('versionId') version:string,@Param('chunkId') chunk:string){return this.store.getChunk(req.identity!,id(doc),id(version),id(chunk)).then(data=>({data}));}
+  @Get(':versionId/index-generations')
+  generations(@Req() req:AuthRequest,@Param('documentId') doc:string,@Param('versionId') version:string){return this.store.listGenerations(req.identity!,id(doc),id(version)).then(data=>({data}));}
+  @Post(':versionId/index-generations') @HttpCode(202)
+  rebuild(@Req() req:AuthRequest,@Param('documentId') doc:string,@Param('versionId') version:string,@Body() raw:unknown,@Headers('idempotency-key') token:string|undefined,@Res({passthrough:true}) res:Response){const body=object(raw,['reverify']);if(body.reverify!==undefined&&typeof body.reverify!=='boolean')fail(400,'INVALID_INPUT');return this.store.rebuildIndex(req.identity!,id(doc),id(version),key(token),body.reverify===true,requestId(res)).then(data=>({data}));}
   @Get(':versionId/content')
   async content(@Req() req:AuthRequest,@Param('documentId') docValue:string,@Param('versionId') versionValue:string,@Res() res:Response){
     const doc=id(docValue),version=id(versionValue);const {bytes,metadata}=await this.store.sourceForDownload(req.identity!,doc,version);

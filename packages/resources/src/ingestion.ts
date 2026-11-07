@@ -10,7 +10,7 @@ import type { UploadLimits } from './upload-validation';
 import { ingestionConfig, type IngestionConfig } from './job-contract';
 export interface AttemptLease {tenant_id:string;job_id:string;run_no:number;lease_token:string;source:{key:string;version:string;size:number;sha256:string;mime:string;filename:string};checkpoint:boolean;parser_version:string}
 const terminal=new Set(['succeeded','failed','cancelled']);
-const manualRetry=new Set(['SOURCE_UNAVAILABLE','LEASE_EXPIRED','WORKER_DEADLINE','WORKER_ERROR','ACCESS_REVOKED','PARSE_TIMEOUT','PARSE_RESOURCE_LIMIT','PARSER_START_FAILED','PARSER_FAILED','CHUNK_TIMEOUT']);
+const manualRetry=new Set(['SOURCE_UNAVAILABLE','LEASE_EXPIRED','WORKER_DEADLINE','WORKER_ERROR','ACCESS_REVOKED','PARSE_TIMEOUT','PARSE_RESOURCE_LIMIT','PARSER_START_FAILED','PARSER_FAILED','CHUNK_TIMEOUT','EMBEDDING_UNAVAILABLE','EMBEDDING_AUTH_FAILED','EMBEDDING_RATE_LIMIT','EMBEDDING_BUSY','VECTOR_STORE_UNAVAILABLE','VECTOR_VERIFICATION_FAILED','INDEX_PROFILE_UNAVAILABLE']);
 export class IngestionStore extends UploadStore {
   constructor(url:string|undefined,schema:string|undefined,secret:string|undefined,objects:ObjectStore,limits:UploadLimits,readonly config:IngestionConfig=ingestionConfig()){super(url,schema,secret,objects,limits)}
   private view(row:any):IngestionJob{return {id:row.id,kb_id:row.kb_id,document_id:row.document_id,version_id:row.version_id,version_no:row.version_no,pipeline_version:row.pipeline_version,status:row.status,stage:row.stage,error_code:row.error_code,dead_letter:row.dead_letter,run_no:row.run_no,attempt_count:row.attempt_count,total_attempts:row.total_attempts,max_attempts:row.max_attempts,progress:null,next_run_at:['queued','retry_wait'].includes(row.status)?row.next_run_at.toISOString():null,cancel_requested:!!row.cancel_requested_at,created_at:row.created_at.toISOString(),updated_at:row.updated_at.toISOString()}}
@@ -48,6 +48,7 @@ export class IngestionStore extends UploadStore {
     let updated=row;
     if(action==='retry'){
       if(row.status!=='failed'||!manualRetry.has(row.error_code))fail(409,'JOB_NOT_RETRYABLE');
+      if(row.error_code==='EMBEDDING_RATE_LIMIT'&&row.next_run_at>now)fail(409,'JOB_RETRY_TOO_EARLY');
       updated=await this.change(client,row,{status:'queued',stage:'queued',run_no:row.run_no+1,attempt_count:0,executor_id:member.membership_id,dispatch_revision:row.dispatch_revision+1,last_enqueued_at:null,next_run_at:now,cancel_requested_at:null,error_code:null,dead_letter:false});
       await client.query('UPDATE ingestion_dead_letter SET resolved_at=now() WHERE tenant_id=$1 AND job_id=$2 AND run_no=$3',[member.tenant_id,id,row.run_no]);
     }else if(!terminal.has(row.status)&&!row.cancel_requested_at){
@@ -62,13 +63,13 @@ export class IngestionStore extends UploadStore {
     await this.doc(client,current,row.document_id,'write');return current;
   }
   protected async endAttempt(client:PoolClient,row:any,status:string,code:string|null){await client.query('UPDATE ingestion_attempt SET status=$4,error_code=$5,ended_at=now() WHERE tenant_id=$1 AND job_id=$2 AND lease_token=$3 AND status=\'running\'',[row.tenant_id,row.id,row.lease_token,status,code])}
-  protected async failed(client:PoolClient,row:any,code:string,automatic:boolean,interrupted=false){
+  protected async failed(client:PoolClient,row:any,code:string,automatic:boolean,interrupted=false,minimumDelayMs=0){
     if(row.cancel_requested_at){await this.endAttempt(client,row,'cancelled','USER_CANCELLED');await this.change(client,row,{status:'cancelled',stage:'cancelled',error_code:'USER_CANCELLED',dead_letter:false});return}
     const retry=automatic&&row.attempt_count<row.max_attempts;
     await this.endAttempt(client,row,interrupted?'interrupted':'failed',code);
     const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.getTime();
     const jitter=Math.floor(Math.random()*Math.min(250,this.config.retryMs));
-    await this.change(client,row,{status:retry?'retry_wait':'failed',stage:retry?'retry_wait':'failed',error_code:code,dead_letter:!retry,next_run_at:new Date(now+Math.min(60000,this.config.retryMs*2**Math.max(0,row.attempt_count-1))+jitter),last_enqueued_at:null});
+    await this.change(client,row,{status:retry?'retry_wait':'failed',stage:retry?'retry_wait':'failed',error_code:code,dead_letter:!retry,next_run_at:new Date(now+Math.max(minimumDelayMs,Math.min(60000,this.config.retryMs*2**Math.max(0,row.attempt_count-1))+jitter)),last_enqueued_at:null});
     if(!retry)await client.query('INSERT INTO ingestion_dead_letter(tenant_id,job_id,run_no,error_code) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING',[row.tenant_id,row.id,row.run_no,code]);
   }
   claim(delivery:IngestionDelivery,workerId:string){return transaction(this.pool,async(client):Promise<AttemptLease|null>=>{
@@ -105,7 +106,7 @@ export class IngestionStore extends UploadStore {
     if(continueParsing){await this.change(client,row,{status:'running',stage:'parsing',error_code:null});return true}
     await this.endAttempt(client,row,'completed',null);await this.change(client,row,{status:'waiting_dependency',stage:'awaiting_parser',error_code:'PARSER_NOT_CONFIGURED',dead_letter:false});return true;
   });}
-  failAttempt(lease:AttemptLease,code:string,retryable:boolean){return transaction(this.pool,async client=>{const row=await this.owned(client,lease);if(!row)return false;await this.failed(client,row,row.deadline_at.getTime()<=row.db_now.getTime()?'WORKER_DEADLINE':code,retryable);return true})}
+  failAttempt(lease:AttemptLease,code:string,retryable:boolean,retryAfterMs=0){return transaction(this.pool,async client=>{const row=await this.owned(client,lease);if(!row)return false;await this.failed(client,row,row.deadline_at.getTime()<=row.db_now.getTime()?'WORKER_DEADLINE':code,retryable,false,retryAfterMs);return true})}
   recoverExpired(){return transaction(this.pool,async client=>{
     const rows=await client.query("SELECT * FROM ingestion_job WHERE status='running' AND lease_until<=clock_timestamp() ORDER BY lease_until LIMIT 100 FOR UPDATE SKIP LOCKED");
     for(const row of rows.rows)await this.failed(client,row,'LEASE_EXPIRED',true,true);return rows.rowCount??0;
