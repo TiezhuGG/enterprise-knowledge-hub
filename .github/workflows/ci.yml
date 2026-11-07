@@ -1,0 +1,28 @@
+name: foundation
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: cp .env.example .env && docker compose config --quiet
+      - run: npm run infra:up
+      - name: Worker queue and independent restart
+        run: |
+          node --env-file=.env apps/worker/dist/main.js > /tmp/worker.log 2>&1 &
+          worker_pid=$!
+          trap 'kill "$worker_pid" 2>/dev/null || true' EXIT
+          npm run smoke:queue
+          kill "$worker_pid"
+          wait "$worker_pid" || true
+          node --env-file=.env apps/worker/dist/main.js >> /tmp/worker.log 2>&1 &
+          worker_pid=$!
+          npm run smoke:queue
+      - if: always()
+        run: docker compose down
