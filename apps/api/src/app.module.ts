@@ -1,3 +1,4 @@
+import {ChatController} from './resources/chat.controller';
 import {SearchController} from './resources/search.controller';
 import { Controller, Get, Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
@@ -20,5 +21,5 @@ class HealthController {
   }
 }
 
-@Module({ imports: [ResourcesModule], controllers: [HealthController, AuthController, KnowledgeController, DocumentController, UploadController, VersionsController, JobsController, SearchController], providers: [AuthService, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ResourceFilter }] })
+@Module({ imports: [ResourcesModule], controllers: [HealthController, AuthController, KnowledgeController, DocumentController, UploadController, VersionsController, JobsController, SearchController, ChatController], providers: [AuthService, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ResourceFilter }] })
 export class AppModule {}

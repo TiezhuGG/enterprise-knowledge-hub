@@ -1,21 +1,22 @@
 import {randomUUID} from 'node:crypto';
-import type {AnswerResponse,IdentityContext,SearchInput} from '@zhiheng/contracts';
+import type {AnswerResponse,IdentityContext,SearchInput,SearchEvidence} from '@zhiheng/contracts';
 import {RetrievalStore} from './retrieval';import {GenerationFailure,generationProfile,generate} from './generation';import {fail,ResourceError} from './policy';
+export interface AnswerHooks {evidence?:(sources:SearchEvidence[])=>Promise<void>;progress?:(stage:'retrieving'|'generating'|'validating')=>Promise<void>}
 export class AnswerStore extends RetrievalStore {
  private readonly answering=new Set<string>();
- async answer(current:IdentityContext,input:SearchInput,signal=AbortSignal.timeout(95000)):Promise<AnswerResponse>{
+ async answer(current:IdentityContext,input:SearchInput,signal=AbortSignal.timeout(95000),hooks:AnswerHooks={}):Promise<AnswerResponse>{
   const key=`${current.tenant_id}:${current.membership_id}`;
   if(this.answering.has(key)||this.answering.size>=2)fail(429,'ANSWER_BUSY');this.answering.add(key);
   const base:AnswerResponse={answer_id:randomUUID(),status:'refused',message:'当前证据不足，无法可靠回答。请补充资料或明确问题。',reason:'insufficient_evidence',claims:[],sources:[],model:null,usage:{prompt_tokens:null,completion_tokens:null}};
   try{
-   const evidence=await this.search(current,input,signal);if(!evidence.data.length)return base;
+   await hooks.progress?.('retrieving');const evidence=await this.search(current,input,signal);await hooks.evidence?.(evidence.data);if(!evidence.data.length)return base;
    let profile;try{profile=generationProfile()}catch{return {...base,status:'failed',reason:'generation_unavailable',message:'本地生成服务尚未配置完成。'}}
    if(!profile)return {...base,status:'failed',reason:'generation_unavailable',message:'本地生成服务尚未配置完成。'};
    base.model={name:profile.model,revision:profile.revision,prompt_version:'extractive-v1'};
    // Dispatch under all source gates, then release locks while inference runs.
    // Wrap the promise so the transaction does not hold ACL locks during inference.
-   const dispatch=await this.withEvidence(current,evidence.data,fresh=>{if(signal.aborted)fail(408,'ANSWER_CANCELLED');const pending=generate(profile,input.query,fresh,signal);void pending.catch(()=>{});return {pending}});
-   const generated=await dispatch.pending;
+   await hooks.progress?.('generating');const dispatch=await this.withEvidence(current,evidence.data,fresh=>{if(signal.aborted)fail(408,'ANSWER_CANCELLED');const pending=generate(profile,input.query,fresh,signal);void pending.catch(()=>{});return {pending}});
+   const generated=await dispatch.pending;await hooks.progress?.('validating');
    return await this.withEvidence(current,evidence.data,fresh=>{
     if(signal.aborted)fail(408,'ANSWER_CANCELLED');
     if(generated.status==='insufficient')return {...base,usage:generated.usage};

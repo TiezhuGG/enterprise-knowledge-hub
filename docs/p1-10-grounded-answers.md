@@ -66,3 +66,5 @@ INDEX_PYTHON=/path/to/index-venv/bin/python npm run test:retrieval
 Chromium桌面1440及移动390宽度验证了无证据拒答、摘录显示、来源复核、确切版本下载、权限变化清空回答，无横向溢出或页面脚本错误；截图 `/tmp/zhiheng-p1-10.png`、`/tmp/zhiheng-p1-10-mobile.png` 为当前工作区临时验收产物。协议夹具的预设选段与拒答不代表真实模型的语义判断能力。
 
 本轮全工作区类型检查和生产构建通过；单元/基础测试37项、既有认证至检索集成100项、问答集成15项，合计152项通过。并行运行旧检索套件时曾出现一次SEARCH_UNAVAILABLE/503，随后隔离重跑12项全部通过；不将该次瞬时失败记为稳定性验收通过。Milvus高负载与生产可用性仍需专门验证。
+
+后续进展：P1-11已增加独立的持久chat-runs接口、历史、SSE和停止，见 [流式问答说明](p1-11-streaming-chat.md)。本页非持久/非流式边界继续适用于旧 `/answers` 接口。

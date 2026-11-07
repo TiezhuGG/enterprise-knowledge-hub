@@ -16,3 +16,5 @@ export {RetrievalStore} from './retrieval';
 
 export {AnswerStore} from './answers';
 export {generationProfile,generate,validateClaims,GenerationFailure} from './generation';
+
+export {ChatStore} from './chat';

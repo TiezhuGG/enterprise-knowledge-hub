@@ -23,3 +23,6 @@ section { max-width: 720px; padding: 80px 0; }
 .parsed-table { border-collapse: collapse; width: 100%; }
 .parsed-table th, .parsed-table td { border: 1px solid #dce5df; padding: 8px; white-space: pre-wrap; min-width: 80px; }
 .parsed-table th { background: #f5f7f3; }
+.chat-message { margin-bottom: 12px; }
+.chat-message .ant-card-head-title { white-space: normal; overflow-wrap: anywhere; }
+.chat-message .ant-btn-link { height: auto; white-space: normal; text-align: start; overflow-wrap: anywhere; padding-inline: 0; }

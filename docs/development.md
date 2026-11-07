@@ -87,3 +87,5 @@ P1-08 索引接入与本地CPU模型配置见 [索引说明](p1-08-embedding-and
 P1-09 授权检索与引用复核见 [检索说明](p1-09-authorized-retrieval.md)。`npm run test:retrieval`使用与索引测试相同Python运行环境；`npm run index:warm`为维护者预热当前配置空间，不调用模型。
 
 P1-10 本地生成配置、原文摘录与拒答规则见 [问答说明](p1-10-grounded-answers.md)。测试：`npm run test:answers`（与索引测试共用Python依赖）。用户尚未部署生成服务，默认关闭；受控协议测试不代表真实模型质量。
+
+P1-11 会话、SSE恢复与停止见 [流式问答说明](p1-11-streaming-chat.md)。先执行 `npm run db:migrate` 创建聊天表；集成测试 `npm run test:chat` 共用索引测试Python环境。页面使用持久chat-runs接口；模型服务依旧默认关闭。

@@ -126,3 +126,13 @@ export interface AnswerResponse {
  model:{name:string;revision:string;prompt_version:'extractive-v1'}|null;
  usage:{prompt_tokens:number|null;completion_tokens:number|null};
 }
+
+export interface Conversation {id:string;title:string;row_version:number;created_at:string}
+export type ChatStage='queued'|'retrieving'|'generating'|'validating'|'finished';
+export interface ChatRun {
+ id:string;conversation_id:string;question_message_id:string;message_id:string;parent_run_id:string|null;question:string;
+ status:'running'|'completed'|'failed'|'cancelled'|'restricted';stage:ChatStage;last_event_id:number;
+ answer:AnswerResponse|null;error_code:string|null;feedback:'helpful'|'unhelpful'|null;created_at:string;
+ events_url:string;status_url:string;cancel_url:string;
+}
+export interface ChatEvent {run_id:string;seq:number;type:'run.started'|'run.progress'|'citation.upsert'|'answer.delta'|'run.completed'|'run.failed'|'run.cancelled';stage?:ChatStage;source?:SearchEvidence;claim_index?:number;evidence_id?:string;delta?:string;message_id?:string;error_code?:string|null}
