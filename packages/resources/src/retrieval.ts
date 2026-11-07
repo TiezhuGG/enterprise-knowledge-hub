@@ -1,3 +1,4 @@
+import {bm25,lexicalQuery,LEXICAL_VERSION,DICTIONARY_HASH} from './lexical';
 import {createHmac,createHash,timingSafeEqual,randomUUID} from 'node:crypto';
 import type {PoolClient} from 'pg';
 import type {IdentityContext,SearchInput,SearchResponse,SearchEvidence,KnowledgeChunk} from '@zhiheng/contracts';
@@ -27,6 +28,7 @@ export class RetrievalStore extends IndexingStore {
  async search(current:IdentityContext,input:SearchInput,signal?:AbortSignal,requestId?:string):Promise<SearchResponse>{
   signal=signal?AbortSignal.any([signal,AbortSignal.timeout(30000)]):AbortSignal.timeout(30000);
   const searchId=requestId??randomUUID(),empty=(reason:SearchResponse['meta']['reason']):SearchResponse=>({data:[],context:'',meta:{search_id:searchId,mode:'dense',degraded:false,candidate_limit:160,returned:0,context_characters:0,max_characters:input.max_characters,reason}});
+  if(input.mode==='lexical')return this.lexicalSearch(current,input,signal,searchId);
   const targets=await this.run(current,(c,m)=>this.eligible(c,m,input.kb_ids));if(!targets.length)return empty('no_visible_published_documents');
   let profile;try{profile=embeddingProfile()}catch{fail(503,'SEARCH_NOT_CONFIGURED')}if(!profile)fail(503,'SEARCH_NOT_CONFIGURED');if(targets.some(t=>t.profile_hash!==profile.hash))fail(503,'SEARCH_MODEL_SPACE_UNAVAILABLE');
   const dense=new DenseIndex(profile);let hits:Array<{target:Target;chunk:string;score:number}>=[];
@@ -44,9 +46,28 @@ export class RetrievalStore extends IndexingStore {
   }catch(error){if(error instanceof ResourceError&&error.status===404)continue;throw error}}
   candidates.sort((a,b)=>b.score-a.score||a.target.document_id.localeCompare(b.target.document_id)||a.chunk.ordinal-b.chunk.ordinal);
   // Gate C: re-authorize after object reads. Hold source/document gates until evidence assembly commits.
-  return this.run(current,async(client,member)=>{const data:SearchEvidence[]=[],sections:string[]=[],seen=new Set<string>();let used=0,budgetSkipped=false;
+  return this.run(current,(client,member)=>this.assemble(client,member,input,signal,searchId,candidates));
+ }
+ private async assemble(client:PoolClient,member:IdentityContext,input:SearchInput,signal:AbortSignal,searchId:string,candidates:Array<{target:Target;chunk:KnowledgeChunk;score:number}>):Promise<SearchResponse>{
+  const data:SearchEvidence[]=[],sections:string[]=[],seen=new Set<string>();let used=0,budgetSkipped=false;
    for(const candidate of candidates){if(signal?.aborted)fail(408,'SEARCH_CANCELLED');if(data.length>=input.top_k)break;if(seen.has(candidate.chunk.retrieval_sha256))continue;try{const permit=await this.published(client,member,candidate.target);const receipt=await client.query('SELECT 1 FROM index_receipt WHERE tenant_id=$1 AND generation_id=$2 AND chunk_id=$3 AND retrieval_sha256=$4 FOR SHARE',[member.tenant_id,candidate.target.generation_id,candidate.chunk.id,candidate.chunk.retrieval_sha256]);if(!receipt.rowCount)continue;const section=JSON.stringify({id:`E${data.length+1}`,title:permit.row.title,version_no:permit.row.version_no,heading_path:candidate.chunk.heading_path,excerpt:candidate.chunk.text}),cost=section.length+(sections.length?1:0);if(used+cost>input.max_characters){budgetSkipped=true;continue}const target={...candidate.target,title:permit.row.title};data.push(this.evidence(member,target,candidate.chunk,permit.row.version_no,permit.download,data.length+1,candidate.score));seen.add(candidate.chunk.retrieval_sha256);sections.push(section);used+=cost}catch(error){if(error instanceof ResourceError&&error.status===404)continue;throw error}}
-   return {data,context:sections.join('\n'),meta:{search_id:searchId,mode:'dense',degraded:false,candidate_limit:160,returned:data.length,context_characters:used,max_characters:input.max_characters,reason:data.length?'ok':budgetSkipped?'context_budget_exhausted':'no_matching_evidence'}};
+   return {data,context:sections.join('\n'),meta:{search_id:searchId,mode:input.mode,degraded:false,candidate_limit:160,returned:data.length,context_characters:used,max_characters:input.max_characters,...(input.mode==='lexical'?{lexical:{algorithm:'bm25-k1-1.2-b-0.75',tokenizer_version:LEXICAL_VERSION,dictionary_hash:DICTIONARY_HASH}}:{}),reason:data.length?'ok':budgetSkipped?'context_budget_exhausted':'no_matching_evidence'}};
+
+ }
+ private async lexicalSearch(current:IdentityContext,input:SearchInput,signal:AbortSignal,searchId:string):Promise<SearchResponse>{
+  const deadline=Date.now()+30000;lexicalQuery(input.query);if(!Number.isFinite(input.min_score)||input.min_score<0)fail(400,'INVALID_MIN_SCORE');
+  return this.run(current,async(client,member)=>{
+   const targets=await this.eligible(client,member,input.kb_ids);if(targets.length>50)fail(422,'LEXICAL_SCOPE_TOO_LARGE');
+   const corpus:Array<{target:Target;chunk:KnowledgeChunk;score:number}>=[];let bytes=0;
+   // Keep source gates through scoring: DF must never include documents revoked during collection.
+   for(const target of targets){if(signal.aborted)fail(408,'SEARCH_CANCELLED');const permit=await this.published(client,member,target);bytes+=permit.row.artifact_size;if(bytes>33554432||corpus.length+permit.row.chunk_count>5000)fail(422,'LEXICAL_SCOPE_TOO_LARGE');
+    const artifact=await this.readChunks(permit.row,signal),receipts=(await client.query('SELECT chunk_id,retrieval_sha256 FROM index_receipt WHERE tenant_id=$1 AND generation_id=$2 FOR SHARE',[member.tenant_id,target.generation_id])).rows;
+    const verified=new Map(receipts.map(r=>[r.chunk_id,r.retrieval_sha256]));if(artifact.chunks.some(c=>verified.get(c.id)!==c.retrieval_sha256))fail(503,'SEARCH_INDEX_INCOMPLETE');
+    for(const chunk of artifact.chunks)corpus.push({target,chunk,score:0});
+   }
+   const scores=bm25(corpus.map(c=>c.chunk.retrieval_text),input.query);if(signal.aborted||Date.now()>deadline)fail(408,'SEARCH_CANCELLED');for(let i=0;i<corpus.length;i++)corpus[i]!.score=scores[i]!;
+   const candidates=corpus.filter(c=>c.score>0&&c.score>=input.min_score).sort((a,b)=>b.score-a.score||a.target.document_id.localeCompare(b.target.document_id)||a.chunk.ordinal-b.chunk.ordinal).slice(0,160);
+   const result=await this.assemble(client,member,input,signal,searchId,candidates);if(!targets.length)result.meta.reason='no_visible_published_documents';return result;
   });
  }
  /** Internal gate for server-produced evidence only; never accepts a client context.

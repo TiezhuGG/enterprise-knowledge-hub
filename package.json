@@ -44,7 +44,9 @@
     "eval:review": "node scripts/evaluation/review.mjs",
     "test:evaluation": "node --env-file-if-exists=.env --test scripts/evaluation.integration.mjs",
     "test:corrections": "node --env-file-if-exists=.env --test scripts/corrections.integration.mjs",
-    "test:lifecycle": "node --env-file-if-exists=.env --test scripts/lifecycle.integration.mjs"
+    "test:lifecycle": "node --env-file-if-exists=.env --test scripts/lifecycle.integration.mjs",
+    "test:lexical": "node --env-file-if-exists=.env --test scripts/lexical.integration.mjs",
+    "compare:retrieval": "node --env-file-if-exists=.env scripts/compare-retrieval.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

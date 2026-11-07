@@ -95,3 +95,5 @@ P1-12 冻结样本与评测流程见 [评测说明](p1-12-baseline-evaluation.md
 P1-13 问题反馈、任务恢复和版本纠错见 [人工纠错说明](p1-13-knowledge-corrections.md)。执行 `npm run db:migrate` 增加私有纠错/审计表；回归 `npm run test:corrections` 共用索引测试Python环境。纠错接口不会代替安全扫描或直接发布修订。
 
 P1-14 删除屏障、清理失败恢复与历史保留见 [生命周期说明](p1-14-deletion-and-retention.md)。迁移010需与新版API/Worker一起部署；`npm run test:lifecycle`共用索引测试Python环境。物理清理默认关闭，历史到期读取保护始终生效。
+
+P2-01 词法通道与中文术语见 [词法检索说明](p2-01-lexical-retrieval.md)。无需新迁移；`npm run test:lexical`验证BM25与共享门禁，`npm run compare:retrieval -- --fixture --output work/new-comparison`执行明确标记的协议对照；去掉`--fixture`要求真实本地嵌入服务。
