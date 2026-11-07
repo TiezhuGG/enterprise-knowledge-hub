@@ -1,8 +1,9 @@
+import { rerank, rerankProfile, rerankOptions, contextOptions, rerankInputs, RerankFailure } from './reranking';
 import { hybridOptions, reciprocalRankFusion, canDegrade } from './fusion';
 import { bm25, lexicalQuery, LEXICAL_VERSION, DICTIONARY_HASH } from './lexical';
 import { createHmac, createHash, timingSafeEqual, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
-import type { IdentityContext, SearchInput, SearchResponse, SearchEvidence, KnowledgeChunk, FusionEvidence } from '@zhiheng/contracts';
+import type { IdentityContext, SearchInput, SearchResponse, SearchEvidence, KnowledgeChunk, FusionEvidence, RerankMeta } from '@zhiheng/contracts';
 import { IndexingStore } from './indexing';
 import { kbCaps, docCaps } from './store';
 import { ROLE_ACTIONS, ResourceError, fail } from './policy';
@@ -21,9 +22,16 @@ type Candidate = {
     chunk: KnowledgeChunk;
     score: number;
     retrieval?: FusionEvidence;
+    rerank?: {
+        rank: number;
+        score: number;
+        original_rank: number;
+        truncated: boolean;
+    };
 };
 const candidateKey = (c: Candidate) => [c.target.document_id, c.target.version_id, c.target.generation_id, c.chunk.id].join(':');
 export class RetrievalStore extends IndexingStore {
+    private readonly reranking = new Set<string>();
     private async eligible(client: PoolClient, member: IdentityContext, kbs?: string[]): Promise<Target[]> {
         if (kbs)
             for (const kb of [...kbs].sort())
@@ -48,28 +56,34 @@ export class RetrievalStore extends IndexingStore {
             fail(404, 'RESOURCE_UNAVAILABLE');
         return { row, download: doc.capabilities.includes('download') };
     }
-    private sign(member: IdentityContext, target: Target, chunk: string) { if (this.cursorSecret.length < 32)
-        fail(503, 'CURSOR_SECRET_REQUIRED'); const payload = Buffer.from(JSON.stringify({ tenant: member.tenant_id, member: member.membership_id, target, chunk, expires: Date.now() + 600000 })).toString('base64url'); return `${payload}.${createHmac('sha256', this.cursorSecret).update(payload).digest('base64url')}`; }
+    private sign(member: IdentityContext, target: Target, chunk: string) {
+        if (this.cursorSecret.length < 32)
+            fail(503, 'CURSOR_SECRET_REQUIRED');
+        const payload = Buffer.from(JSON.stringify({ tenant: member.tenant_id, member: member.membership_id, target, chunk, expires: Date.now() + 600000 })).toString('base64url');
+        return `${payload}.${createHmac('sha256', this.cursorSecret).update(payload).digest('base64url')}`;
+    }
     private token(member: IdentityContext, token: string, allowExpired = false): {
         target: Target;
         chunk: string;
-    } { try {
-        if (token.length > 4096 || this.cursorSecret.length < 32)
-            throw new Error();
-        const [payload, signature, extra] = token.split('.');
-        if (!payload || !signature || extra)
-            throw new Error();
-        const expected = createHmac('sha256', this.cursorSecret).update(payload).digest(), actual = Buffer.from(signature, 'base64url');
-        if (expected.length !== actual.length || !timingSafeEqual(expected, actual))
-            throw new Error();
-        const value = JSON.parse(Buffer.from(payload, 'base64url').toString());
-        if (value.tenant !== member.tenant_id || value.member !== member.membership_id || !Number.isFinite(value.expires) || (!allowExpired && value.expires < Date.now()) || !value.target || !value.chunk)
-            throw new Error();
-        return value;
+    } {
+        try {
+            if (token.length > 4096 || this.cursorSecret.length < 32)
+                throw new Error();
+            const [payload, signature, extra] = token.split('.');
+            if (!payload || !signature || extra)
+                throw new Error();
+            const expected = createHmac('sha256', this.cursorSecret).update(payload).digest(), actual = Buffer.from(signature, 'base64url');
+            if (expected.length !== actual.length || !timingSafeEqual(expected, actual))
+                throw new Error();
+            const value = JSON.parse(Buffer.from(payload, 'base64url').toString());
+            if (value.tenant !== member.tenant_id || value.member !== member.membership_id || !Number.isFinite(value.expires) || (!allowExpired && value.expires < Date.now()) || !value.target || !value.chunk)
+                throw new Error();
+            return value;
+        }
+        catch {
+            fail(404, 'RESOURCE_UNAVAILABLE');
+        }
     }
-    catch {
-        fail(404, 'RESOURCE_UNAVAILABLE');
-    } }
     private evidence(member: IdentityContext, target: Target, chunk: KnowledgeChunk, version: number, download: boolean, rank: number | null, score: number | null): SearchEvidence { return { evidence_id: rank === null ? null : `E${rank}`, document_id: target.document_id, version_id: target.version_id, version_no: version, generation_id: target.generation_id, chunk_id: chunk.id, title: target.title, snippet: chunk.text, heading_path: chunk.heading_path, spans: chunk.spans, rank, score, citation_id: this.sign(member, target, chunk.id), download_url: download ? `/api/v1/documents/${target.document_id}/versions/${target.version_id}/content` : null }; }
     async search(current: IdentityContext, input: SearchInput, signal?: AbortSignal, requestId?: string): Promise<SearchResponse> {
         signal = signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000);
@@ -109,20 +123,22 @@ export class RetrievalStore extends IndexingStore {
             await dense.validate();
             const query = await embedQuery(profile, input.query, profile.hash, signal);
             let offset = 0;
-            const lanes = Array.from({ length: Math.min(4, targets.length) }, async () => { while (offset < targets.length) {
-                if (signal?.aborted)
-                    fail(408, 'SEARCH_CANCELLED');
-                const target = targets[offset++]!;
-                const response = await dense.search(current.tenant_id, target.generation_id, profile.hash, query, depth ?? Math.min(50, input.top_k * 4));
-                if (!response.results.length)
-                    fail(503, 'SEARCH_INDEX_INCOMPLETE');
-                for (const hit of response.results) {
-                    if (hit.model_space !== profile.hash || hit.generation_id !== target.generation_id || typeof hit.chunk_id !== 'string' || !Number.isFinite(hit.score))
-                        fail(503, 'SEARCH_INDEX_INVALID');
-                    if (hit.score >= input.min_score)
-                        hits.push({ target, chunk: hit.chunk_id, score: Math.max(-1, Math.min(1, hit.score)) });
+            const lanes = Array.from({ length: Math.min(4, targets.length) }, async () => {
+                while (offset < targets.length) {
+                    if (signal?.aborted)
+                        fail(408, 'SEARCH_CANCELLED');
+                    const target = targets[offset++]!;
+                    const response = await dense.search(current.tenant_id, target.generation_id, profile.hash, query, depth ?? Math.min(50, input.top_k * 4));
+                    if (!response.results.length)
+                        fail(503, 'SEARCH_INDEX_INCOMPLETE');
+                    for (const hit of response.results) {
+                        if (hit.model_space !== profile.hash || hit.generation_id !== target.generation_id || typeof hit.chunk_id !== 'string' || !Number.isFinite(hit.score))
+                            fail(503, 'SEARCH_INDEX_INVALID');
+                        if (hit.score >= input.min_score)
+                            hits.push({ target, chunk: hit.chunk_id, score: Math.max(-1, Math.min(1, hit.score)) });
+                    }
                 }
-            } });
+            });
             const settled = await Promise.allSettled(lanes);
             for (const result of settled)
                 if (result.status === 'rejected')
@@ -178,14 +194,22 @@ export class RetrievalStore extends IndexingStore {
     }
     private async assemble(client: PoolClient, member: IdentityContext, input: SearchInput, signal: AbortSignal, searchId: string, candidates: Candidate[], emptyReason: SearchResponse['meta']['reason'] = 'no_matching_evidence'): Promise<SearchResponse> {
         const data: SearchEvidence[] = [], sections: string[] = [], seen = new Set<string>();
-        let used = 0, budgetSkipped = false;
+        let used = 0, budgetSkipped = false, duplicates = 0, budgetCount = 0, documentSkipped = 0, considered = 0;
+        const perDocument = new Map<string, number>(), cap = contextOptions(input.context).max_per_document;
         for (const candidate of candidates) {
             if (signal?.aborted)
                 fail(408, 'SEARCH_CANCELLED');
             if (data.length >= input.top_k)
                 break;
-            if (seen.has(candidate.chunk.retrieval_sha256))
+            considered++;
+            if (seen.has(candidate.chunk.retrieval_sha256)) {
+                duplicates++;
                 continue;
+            }
+            if ((perDocument.get(candidate.target.document_id) ?? 0) >= cap) {
+                documentSkipped++;
+                continue;
+            }
             try {
                 const permit = await this.published(client, member, candidate.target);
                 const receipt = await client.query('SELECT 1 FROM index_receipt WHERE tenant_id=$1 AND generation_id=$2 AND chunk_id=$3 AND retrieval_sha256=$4 FOR SHARE', [member.tenant_id, candidate.target.generation_id, candidate.chunk.id, candidate.chunk.retrieval_sha256]);
@@ -194,13 +218,15 @@ export class RetrievalStore extends IndexingStore {
                 const section = JSON.stringify({ id: `E${data.length + 1}`, title: permit.row.title, version_no: permit.row.version_no, heading_path: candidate.chunk.heading_path, excerpt: candidate.chunk.text }), cost = section.length + (sections.length ? 1 : 0);
                 if (used + cost > input.max_characters) {
                     budgetSkipped = true;
+                    budgetCount++;
                     continue;
                 }
                 const target = { ...candidate.target, title: permit.row.title };
-                data.push({ ...this.evidence(member, target, candidate.chunk, permit.row.version_no, permit.download, data.length + 1, candidate.score), ...(candidate.retrieval ? { retrieval: candidate.retrieval } : {}) });
+                data.push({ ...this.evidence(member, target, candidate.chunk, permit.row.version_no, permit.download, data.length + 1, candidate.score), ...(candidate.retrieval ? { retrieval: candidate.retrieval } : {}), ...(candidate.rerank ? { rerank: candidate.rerank } : {}) });
                 seen.add(candidate.chunk.retrieval_sha256);
                 sections.push(section);
                 used += cost;
+                perDocument.set(candidate.target.document_id, (perDocument.get(candidate.target.document_id) ?? 0) + 1);
             }
             catch (error) {
                 if (error instanceof ResourceError && error.status === 404)
@@ -208,7 +234,7 @@ export class RetrievalStore extends IndexingStore {
                 throw error;
             }
         }
-        return { data, context: sections.join('\n'), meta: { search_id: searchId, mode: input.mode, degraded: false, candidate_limit: 160, returned: data.length, context_characters: used, max_characters: input.max_characters, ...(input.mode === 'lexical' ? { lexical: { algorithm: 'bm25-k1-1.2-b-0.75', tokenizer_version: LEXICAL_VERSION, dictionary_hash: DICTIONARY_HASH } } : {}), reason: data.length ? 'ok' : budgetSkipped ? 'context_budget_exhausted' : emptyReason } };
+        return { data, context: sections.join('\n'), meta: { search_id: searchId, mode: input.mode, degraded: false, candidate_limit: 160, returned: data.length, context_characters: used, max_characters: input.max_characters, ...(input.context || input.rerank?.enabled ? { selection: { considered, selected: data.length, deduplicated: duplicates, skipped_budget: budgetCount, skipped_document_cap: documentSkipped, max_per_document: cap } } : {}), ...(input.mode === 'lexical' ? { lexical: { algorithm: 'bm25-k1-1.2-b-0.75', tokenizer_version: LEXICAL_VERSION, dictionary_hash: DICTIONARY_HASH } } : {}), reason: data.length ? 'ok' : budgetSkipped ? 'context_budget_exhausted' : emptyReason } };
     }
     private async lexicalSnapshot<T>(current: IdentityContext, input: SearchInput, signal: AbortSignal, scope: Target[] | undefined, consume: (candidates: Candidate[], client: PoolClient, member: IdentityContext, targets: Target[]) => Promise<T>): Promise<T> {
         const deadline = Date.now() + 30000;
@@ -295,19 +321,91 @@ export class RetrievalStore extends IndexingStore {
             fail(503, 'HYBRID_CHANNELS_UNAVAILABLE');
         if (failed && !options.allow_partial)
             fail(503, 'HYBRID_CHANNEL_UNAVAILABLE');
-        // Every original scope target is checked before using its ranks/DF; changed scope is never a fallback.
+        const fused: Candidate[] = reciprocalRankFusion(lists, options.rrf_k).map(r => ({ ...r.value, score: r.score, retrieval: { algorithm: 'rrf' as const, k: options.rrf_k, ranks: r.ranks, contributions: r.contributions, scores: r.scores } }));
+        const reranking = input.rerank?.enabled ? await this.rerankCandidates(current, input, signal, targets, fused) : null;
+        // Dispatch and final assembly each recheck the complete original scope.
         return this.run(current, async (client, member) => {
             for (const target of targets) {
-                if(signal.aborted)fail(408,'SEARCH_CANCELLED');
+                if (signal.aborted)
+                    fail(408, 'SEARCH_CANCELLED');
                 await this.published(client, member, target);
             }
-            if(signal.aborted)fail(408,'SEARCH_CANCELLED');
-            const candidates = reciprocalRankFusion(lists, options.rrf_k).map(r => ({ ...r.value, score: r.score, retrieval: { algorithm: 'rrf' as const, k: options.rrf_k, ranks: r.ranks, contributions: r.contributions, scores: r.scores } }));
-            const result = await this.assemble(client, member, input, signal, searchId, candidates, targets.length ? 'no_matching_evidence' : 'no_visible_published_documents');
-            result.meta.degraded = failed;
+            if (signal.aborted)
+                fail(408, 'SEARCH_CANCELLED');
+            if (input.rerank?.enabled)
+                for (const candidate of fused.slice(0, rerankOptions(input.rerank).top_n)) {
+                    const r = await client.query('SELECT 1 FROM index_receipt WHERE tenant_id=$1 AND generation_id=$2 AND chunk_id=$3 AND retrieval_sha256=$4 FOR SHARE', [member.tenant_id, candidate.target.generation_id, candidate.chunk.id, candidate.chunk.retrieval_sha256]);
+                    if (!r.rowCount)
+                        fail(503, 'SEARCH_INDEX_INCOMPLETE');
+                }
+            const result = await this.assemble(client, member, input, signal, searchId, reranking?.candidates ?? fused, targets.length ? 'no_matching_evidence' : 'no_visible_published_documents');
+            result.meta.degraded = failed || reranking?.meta.status === 'fallback';
             result.meta.hybrid = { algorithm: 'rrf', k: options.rrf_k, candidate_depth: options.candidate_depth, allow_partial: options.allow_partial, channels };
+            if (reranking)
+                result.meta.rerank = reranking.meta;
             return result;
         });
+    }
+    private async rerankCandidates(current: IdentityContext, input: SearchInput, signal: AbortSignal, targets: Target[], candidates: Candidate[]) {
+        const options = rerankOptions(input.rerank), top = candidates.slice(0, options.top_n), inputs = rerankInputs(top.map(c => c.chunk.retrieval_text), options.max_input_characters), start = performance.now();
+        const meta: RerankMeta = { status: 'skipped', model: null, max_input_characters: options.max_input_characters, top_n: options.top_n, received_candidates: candidates.length, sent_candidates: 0, truncated_documents: 0, input_characters: 0, duration_ms: 0, tokens: null, cost: null };
+        if (!top.length) {
+            meta.reason = 'NO_CANDIDATES';
+            return { candidates, meta };
+        }
+        const key = current.tenant_id + ':' + current.membership_id;
+        let held = false;
+        try {
+            let profile;
+            try {
+                profile = rerankProfile();
+            }
+            catch {
+                throw new RerankFailure('RERANK_INVALID_CONFIG');
+            }
+            if (!profile)
+                throw new RerankFailure('RERANK_NOT_CONFIGURED');
+            meta.model = { name: profile.model, revision: profile.revision, profile_hash: profile.hash };
+            if (this.reranking.has(key) || this.reranking.size >= 2)
+                throw new RerankFailure('RERANK_BUSY');
+            this.reranking.add(key);
+            held = true;
+            const dispatch = await this.run(current, async (client, member) => {
+                for (const target of targets)
+                    await this.published(client, member, target);
+                for (const candidate of top) {
+                    const receipt = await client.query('SELECT 1 FROM index_receipt WHERE tenant_id=$1 AND generation_id=$2 AND chunk_id=$3 AND retrieval_sha256=$4 FOR SHARE', [member.tenant_id, candidate.target.generation_id, candidate.chunk.id, candidate.chunk.retrieval_sha256]);
+                    if (!receipt.rowCount)
+                        fail(503, 'SEARCH_INDEX_INCOMPLETE');
+                }
+                if (signal.aborted)
+                    fail(408, 'SEARCH_CANCELLED');
+                meta.sent_candidates = top.length;
+                meta.truncated_documents = inputs.filter(i => i.truncated).length;
+                meta.input_characters = inputs.reduce((n, i) => n + Array.from(i.text).length, 0);
+                const pending = rerank(profile!, input.query, inputs.map(i => i.text), signal);
+                void pending.catch(() => { });
+                return { pending };
+            });
+            const result = await dispatch.pending;
+            meta.status = 'applied';
+            meta.tokens = result.tokens;
+            return { candidates: result.rows.map((row, rank) => ({ ...top[row.index]!, rerank: { rank: rank + 1, score: row.score, original_rank: row.index + 1, truncated: inputs[row.index]!.truncated } })), meta };
+        }
+        catch (error) {
+            if (!(error instanceof RerankFailure))
+                throw error;
+            if (options.failure_policy === 'fail')
+                fail(503, error.code);
+            meta.status = 'fallback';
+            meta.reason = error.code;
+            return { candidates, meta };
+        }
+        finally {
+            meta.duration_ms = performance.now() - start;
+            if (held)
+                this.reranking.delete(key);
+        }
     }
     /** Internal gate for server-produced evidence only; never accepts a client context.
      * Persisted signed proofs may bypass TTL, but still pass every current ACL/publication/hash gate. */
@@ -331,7 +429,13 @@ export class RetrievalStore extends IndexingStore {
         const parsed = await this.run(current, async (client, member) => { const data = this.token(member, token), permit = await this.published(client, member, data.target); return { ...data, row: permit.row }; }), artifact = await this.readChunks(parsed.row), chunk = artifact.chunks.find(c => c.id === parsed.chunk);
         if (!chunk)
             fail(404, 'RESOURCE_UNAVAILABLE');
-        return this.run(current, async (client, member) => { this.token(member, token); const permit = await this.published(client, member, parsed.target); const receipt = await client.query('SELECT 1 FROM index_receipt WHERE tenant_id=$1 AND generation_id=$2 AND chunk_id=$3 AND retrieval_sha256=$4 FOR SHARE', [member.tenant_id, parsed.target.generation_id, chunk.id, chunk.retrieval_sha256]); if (!receipt.rowCount)
-            fail(404, 'RESOURCE_UNAVAILABLE'); return this.evidence(member, { ...parsed.target, title: permit.row.title }, chunk, permit.row.version_no, permit.download, null, null); });
+        return this.run(current, async (client, member) => {
+            this.token(member, token);
+            const permit = await this.published(client, member, parsed.target);
+            const receipt = await client.query('SELECT 1 FROM index_receipt WHERE tenant_id=$1 AND generation_id=$2 AND chunk_id=$3 AND retrieval_sha256=$4 FOR SHARE', [member.tenant_id, parsed.target.generation_id, chunk.id, chunk.retrieval_sha256]);
+            if (!receipt.rowCount)
+                fail(404, 'RESOURCE_UNAVAILABLE');
+            return this.evidence(member, { ...parsed.target, title: permit.row.title }, chunk, permit.row.version_no, permit.download, null, null);
+        });
     }
 }

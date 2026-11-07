@@ -111,14 +111,17 @@ export interface DenseGenerationView {
 export type RetrievalChannel='dense'|'lexical';
 export interface HybridSearchOptions {candidate_depth:number;rrf_k:number;allow_partial:boolean;dense_min_score:number;lexical_min_score:number}
 export interface FusionEvidence {algorithm:'rrf';k:number;ranks:Partial<Record<RetrievalChannel,number>>;contributions:Partial<Record<RetrievalChannel,number>>;scores:Partial<Record<RetrievalChannel,number>>}
-export interface SearchInput {query:string;kb_ids?:string[];top_k:number;mode:'dense'|'lexical'|'hybrid';min_score:number;max_characters:number;hybrid?:HybridSearchOptions}
+export interface RerankOptions {enabled:boolean;top_n:number;max_input_characters:number;failure_policy:'fusion'|'fail'}
+export interface ContextOptions {max_per_document:number}
+export interface RerankMeta {status:'applied'|'fallback'|'skipped';reason?:string;model:{name:string;revision:string;profile_hash:string}|null;max_input_characters:number;top_n:number;received_candidates:number;sent_candidates:number;truncated_documents:number;input_characters:number;duration_ms:number;tokens:number|null;cost:null}
+export interface SearchInput {query:string;kb_ids?:string[];top_k:number;mode:'dense'|'lexical'|'hybrid';min_score:number;max_characters:number;hybrid?:HybridSearchOptions;rerank?:RerankOptions;context?:ContextOptions}
 export interface SearchEvidence {
- retrieval?:FusionEvidence;
+ retrieval?:FusionEvidence;rerank?:{rank:number;score:number;original_rank:number;truncated:boolean};
  evidence_id:string|null;document_id:string;version_id:string;version_no:number;generation_id:string;chunk_id:string;title:string;snippet:string;
  heading_path:string[];spans:ChunkSpan[];rank:number|null;score:number|null;citation_id:string;download_url:string|null;
 }
 export interface SearchResponse {
- data:SearchEvidence[];context:string;meta:{hybrid?:{algorithm:'rrf';k:number;candidate_depth:number;allow_partial:boolean;channels:Array<{name:RetrievalChannel;status:'ok'|'failed';candidates:number;error_code?:string}>};lexical?:{algorithm:string;tokenizer_version:string;dictionary_hash:string};search_id:string;mode:'dense'|'lexical'|'hybrid';degraded:boolean;candidate_limit:number;returned:number;context_characters:number;max_characters:number;reason:'ok'|'no_visible_published_documents'|'no_matching_evidence'|'context_budget_exhausted';};
+ data:SearchEvidence[];context:string;meta:{rerank?:RerankMeta;selection?:{considered:number;selected:number;deduplicated:number;skipped_budget:number;skipped_document_cap:number;max_per_document:number};hybrid?:{algorithm:'rrf';k:number;candidate_depth:number;allow_partial:boolean;channels:Array<{name:RetrievalChannel;status:'ok'|'failed';candidates:number;error_code?:string}>};lexical?:{algorithm:string;tokenizer_version:string;dictionary_hash:string};search_id:string;mode:'dense'|'lexical'|'hybrid';degraded:boolean;candidate_limit:number;returned:number;context_characters:number;max_characters:number;reason:'ok'|'no_visible_published_documents'|'no_matching_evidence'|'context_budget_exhausted';};
 }
 
 /** P1-10 non-streaming, extractive baseline. No model prose is returned. */

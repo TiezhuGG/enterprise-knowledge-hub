@@ -99,3 +99,5 @@ P1-14 删除屏障、清理失败恢复与历史保留见 [生命周期说明](p
 P2-01 词法通道与中文术语见 [词法检索说明](p2-01-lexical-retrieval.md)。无需新迁移；`npm run test:lexical`验证BM25与共享门禁，`npm run compare:retrieval -- --fixture --output work/new-comparison`执行明确标记的协议对照；去掉`--fixture`要求真实本地嵌入服务。
 
 P2-02 并行候选、RRF与显式降级见 [混合检索说明](p2-02-hybrid-retrieval.md)。`npm run test:hybrid`验证融合和共享门禁；`npm run compare:retrieval -- --fixture --hybrid --output work/new-hybrid-comparison`运行同数据集的7策略对照与受控故障实验。默认仍为dense，无新增迁移或依赖。
+
+P2-03 本地重排适配与最终上下文预算见 [重排说明](p2-03-reranking-and-context.md)。`npm run test:reranking`验证权限、版本、超时回退和截断；`npm run compare:retrieval -- --fixture --rerank --output work/new-rerank-comparison`运行显式协议对照。默认RERANK_ENABLED=false，未部署真实服务时不作为模型效果验收。

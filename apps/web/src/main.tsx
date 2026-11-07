@@ -32,7 +32,7 @@ function App() {
   }, [attempt]);
   return <ConfigProvider locale={zhCN} theme={{ token: { colorPrimary: '#236c5b', borderRadius: 12 } }}>
     <main>
-      <header><strong>知衡</strong><span>企业知识中枢</span><Tag>开发环境 · P2-02</Tag></header>
+      <header><strong>知衡</strong><span>企业知识中枢</span><Tag>开发环境 · P2-03</Tag></header>
       <section>
         <Typography.Text className="eyebrow">从可信的知识开始</Typography.Text>
         <Typography.Title>让每一次回答，都有据可循。</Typography.Title>
