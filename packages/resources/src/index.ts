@@ -25,3 +25,5 @@ export {LifecycleStore} from './lifecycle';
 export {lifecyclePolicy,storageKey} from './lifecycle-policy';
 
 export {bm25,tokenize,lexicalQuery,normalizeLexical,LEXICAL_VERSION,DICTIONARY_HASH,DOMAIN_TERMS} from './lexical';
+
+export {hybridOptions,reciprocalRankFusion,canDegrade} from './fusion';

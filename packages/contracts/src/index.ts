@@ -108,20 +108,25 @@ export interface DenseGenerationView {
  required_artifacts:['dense'];created_at:string;ready_at:string|null;
 }
 
-export interface SearchInput {query:string;kb_ids?:string[];top_k:number;mode:'dense'|'lexical';min_score:number;max_characters:number}
+export type RetrievalChannel='dense'|'lexical';
+export interface HybridSearchOptions {candidate_depth:number;rrf_k:number;allow_partial:boolean;dense_min_score:number;lexical_min_score:number}
+export interface FusionEvidence {algorithm:'rrf';k:number;ranks:Partial<Record<RetrievalChannel,number>>;contributions:Partial<Record<RetrievalChannel,number>>;scores:Partial<Record<RetrievalChannel,number>>}
+export interface SearchInput {query:string;kb_ids?:string[];top_k:number;mode:'dense'|'lexical'|'hybrid';min_score:number;max_characters:number;hybrid?:HybridSearchOptions}
 export interface SearchEvidence {
+ retrieval?:FusionEvidence;
  evidence_id:string|null;document_id:string;version_id:string;version_no:number;generation_id:string;chunk_id:string;title:string;snippet:string;
  heading_path:string[];spans:ChunkSpan[];rank:number|null;score:number|null;citation_id:string;download_url:string|null;
 }
 export interface SearchResponse {
- data:SearchEvidence[];context:string;meta:{lexical?:{algorithm:string;tokenizer_version:string;dictionary_hash:string};search_id:string;mode:'dense'|'lexical';degraded:false;candidate_limit:number;returned:number;context_characters:number;max_characters:number;reason:'ok'|'no_visible_published_documents'|'no_matching_evidence'|'context_budget_exhausted';};
+ data:SearchEvidence[];context:string;meta:{hybrid?:{algorithm:'rrf';k:number;candidate_depth:number;allow_partial:boolean;channels:Array<{name:RetrievalChannel;status:'ok'|'failed';candidates:number;error_code?:string}>};lexical?:{algorithm:string;tokenizer_version:string;dictionary_hash:string};search_id:string;mode:'dense'|'lexical'|'hybrid';degraded:boolean;candidate_limit:number;returned:number;context_characters:number;max_characters:number;reason:'ok'|'no_visible_published_documents'|'no_matching_evidence'|'context_budget_exhausted';};
 }
 
 /** P1-10 non-streaming, extractive baseline. No model prose is returned. */
 export interface AnswerClaim {evidence_id:string;quote:string;start:number;end:number}
 export interface AnswerResponse {
+ retrieval?:SearchResponse['meta'];
  answer_id:string;status:'answered'|'conflict'|'refused'|'failed';message:string;
- reason:'verified_quotes'|'conflicting_evidence'|'insufficient_evidence'|'invalid_model_output'|'generation_unavailable'|'generation_timeout'|'sources_changed';
+ reason:'verified_quotes'|'conflicting_evidence'|'insufficient_evidence'|'invalid_model_output'|'generation_unavailable'|'generation_timeout'|'sources_changed'|'retrieval_incomplete';
  claims:AnswerClaim[];sources:SearchEvidence[];
  model:{name:string;revision:string;prompt_version:'extractive-v1'}|null;
  usage:{prompt_tokens:number|null;completion_tokens:number|null};

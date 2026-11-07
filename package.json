@@ -46,7 +46,8 @@
     "test:corrections": "node --env-file-if-exists=.env --test scripts/corrections.integration.mjs",
     "test:lifecycle": "node --env-file-if-exists=.env --test scripts/lifecycle.integration.mjs",
     "test:lexical": "node --env-file-if-exists=.env --test scripts/lexical.integration.mjs",
-    "compare:retrieval": "node --env-file-if-exists=.env scripts/compare-retrieval.mjs"
+    "compare:retrieval": "node --env-file-if-exists=.env scripts/compare-retrieval.mjs",
+    "test:hybrid": "node --env-file-if-exists=.env --test scripts/hybrid.integration.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

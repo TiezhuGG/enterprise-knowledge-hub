@@ -1,3 +1,4 @@
+import {hybridOptions} from '@zhiheng/resources';
 import { RESOURCE_ACTIONS, type ResourceGrant } from '@zhiheng/contracts';
 import { fail, type KnowledgeInput, type ListInput } from '@zhiheng/resources';
 export function object(value: unknown, allowed: readonly string[]): Record<string,unknown> {
@@ -44,9 +45,11 @@ export function grantInput(value:unknown,document=false):{grants:ResourceGrant[]
 }
 
 export function searchInput(raw:unknown):import('@zhiheng/contracts').SearchInput{
-  const b=object(raw,['query','kb_ids','top_k','mode','min_score','max_characters']);if(typeof b.query!=='string'||!b.query.trim()||b.query.trim().length>1200)fail(400,'INVALID_QUERY');if(b.mode!==undefined&&!['dense','lexical'].includes(b.mode as string))fail(400,'UNSUPPORTED_SEARCH_MODE');
+  const b=object(raw,['query','kb_ids','top_k','mode','min_score','max_characters','hybrid']);if(typeof b.query!=='string'||!b.query.trim()||b.query.trim().length>1200)fail(400,'INVALID_QUERY');if(b.mode!==undefined&&!['dense','lexical','hybrid'].includes(b.mode as string))fail(400,'UNSUPPORTED_SEARCH_MODE');
   const integer=(v:unknown,d:number,min:number,max:number)=>{const n=v===undefined?d:v;if(typeof n!=='number'||!Number.isInteger(n)||n<min||n>max)fail(400,'INVALID_SEARCH_LIMIT');return n};let kbs:string[]|undefined;
   if(b.kb_ids!==undefined){if(!Array.isArray(b.kb_ids)||!b.kb_ids.length||b.kb_ids.length>10)fail(400,'INVALID_KB_SCOPE');kbs=[...new Set(b.kb_ids.map(id))]}
+  if(b.hybrid!==undefined&&b.mode!=='hybrid')fail(400,'UNEXPECTED_HYBRID_OPTIONS');if(b.mode==='hybrid'&&b.min_score!==undefined)fail(400,'HYBRID_USE_CHANNEL_THRESHOLDS');
+  const hybrid=b.mode==='hybrid'?hybridOptions(b.hybrid as Parameters<typeof hybridOptions>[0]):undefined;
   const lexical=b.mode==='lexical';const min=b.min_score===undefined?(lexical?0:0.25):b.min_score;if(typeof min!=='number'||!Number.isFinite(min)||min<(lexical?0:-1)||min>(lexical?1000000:1))fail(400,'INVALID_MIN_SCORE');
-  return {query:b.query.trim(),kb_ids:kbs,top_k:integer(b.top_k,5,1,20),mode:lexical?'lexical':'dense',min_score:min,max_characters:integer(b.max_characters,6000,500,16000)};
+  return {query:b.query.trim(),kb_ids:kbs,top_k:integer(b.top_k,5,1,20),mode:b.mode==='hybrid'?'hybrid':lexical?'lexical':'dense',min_score:min,...(hybrid?{hybrid}:{} ),max_characters:integer(b.max_characters,6000,500,16000)};
 }

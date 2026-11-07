@@ -9,7 +9,7 @@ export class AnswerStore extends RetrievalStore {
   if(this.answering.has(key)||this.answering.size>=2)fail(429,'ANSWER_BUSY');this.answering.add(key);
   const base:AnswerResponse={answer_id:randomUUID(),status:'refused',message:'当前证据不足，无法可靠回答。请补充资料或明确问题。',reason:'insufficient_evidence',claims:[],sources:[],model:null,usage:{prompt_tokens:null,completion_tokens:null}};
   try{
-   await hooks.progress?.('retrieving');const evidence=await this.search(current,input,signal);await hooks.evidence?.(evidence.data);if(!evidence.data.length)return base;
+   await hooks.progress?.('retrieving');const evidence=await this.search(current,input,signal);if(input.mode==='hybrid')base.retrieval=evidence.meta;await hooks.evidence?.(evidence.data);if(!evidence.data.length){if(evidence.meta.degraded)return {...base,status:'failed',reason:'retrieval_incomplete',message:'检索仅完成部分通道，当前结果不足以回答。'};return base;}
    let profile;try{profile=generationProfile()}catch{return {...base,status:'failed',reason:'generation_unavailable',message:'本地生成服务尚未配置完成。'}}
    if(!profile)return {...base,status:'failed',reason:'generation_unavailable',message:'本地生成服务尚未配置完成。'};
    base.model={name:profile.model,revision:profile.revision,prompt_version:'extractive-v1'};

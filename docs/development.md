@@ -97,3 +97,5 @@ P1-13 问题反馈、任务恢复和版本纠错见 [人工纠错说明](p1-13-k
 P1-14 删除屏障、清理失败恢复与历史保留见 [生命周期说明](p1-14-deletion-and-retention.md)。迁移010需与新版API/Worker一起部署；`npm run test:lifecycle`共用索引测试Python环境。物理清理默认关闭，历史到期读取保护始终生效。
 
 P2-01 词法通道与中文术语见 [词法检索说明](p2-01-lexical-retrieval.md)。无需新迁移；`npm run test:lexical`验证BM25与共享门禁，`npm run compare:retrieval -- --fixture --output work/new-comparison`执行明确标记的协议对照；去掉`--fixture`要求真实本地嵌入服务。
+
+P2-02 并行候选、RRF与显式降级见 [混合检索说明](p2-02-hybrid-retrieval.md)。`npm run test:hybrid`验证融合和共享门禁；`npm run compare:retrieval -- --fixture --hybrid --output work/new-hybrid-comparison`运行同数据集的7策略对照与受控故障实验。默认仍为dense，无新增迁移或依赖。

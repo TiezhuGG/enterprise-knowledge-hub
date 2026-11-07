@@ -1,0 +1,380 @@
+{
+  "schema": "lexical-dataset-v1",
+  "provenance": "repository-authored-fictional",
+  "documents": [
+    {
+      "id": "prod_a100",
+      "kb": "public",
+      "filename": "prod_a100.md",
+      "state": "published",
+      "text": "A-100 安装：电源规格为 24V，使用蓝色接头。",
+      "sha256": "c1529b6f362991f2f870de06d3f1ae3f84cffb88c6b97f7db7d25c6e15489b7a"
+    },
+    {
+      "id": "prod_a1000",
+      "kb": "public",
+      "filename": "prod_a1000.md",
+      "state": "published",
+      "text": "A-1000 安装：电源规格为 48V，使用红色接头。",
+      "sha256": "387699bf0ebbf16f15c663be0dcfb507da5e82d6d310ba63bb194a769ab98ddb"
+    },
+    {
+      "id": "prod_xa100",
+      "kb": "public",
+      "filename": "prod_xa100.md",
+      "state": "published",
+      "text": "XA-100 安装：由专门维护团队处理。",
+      "sha256": "2dc42b0c60d2eb205be05daafb54f36fed5dff009a3d4b04de9c40b76ba1bb31"
+    },
+    {
+      "id": "prod_a200",
+      "kb": "public",
+      "filename": "prod_a200.md",
+      "state": "published",
+      "text": "A-200 故障码 E-17 表示温度传感器断开。",
+      "sha256": "f3a518c12f1b0b9f8111d94812bc84835f8f6cf54c41fd462614d08bd4313f40"
+    },
+    {
+      "id": "sso",
+      "kb": "public",
+      "filename": "sso.md",
+      "state": "published",
+      "text": "SSO 接入采用 SAML-2.0 协议，登录失败请检查证书。",
+      "sha256": "ca6a00e00f9e0597b0d8f6e56d15cc35724115d2f5b6f3dbb645c059faa8ba60"
+    },
+    {
+      "id": "api",
+      "kb": "public",
+      "filename": "api.md",
+      "state": "published",
+      "text": "API/v1 的限流标准为每分钟 60 次。",
+      "sha256": "b933ea1d819b98b5e972a467a85a021b2fd9d8b9a4fb4ad8b6e556685d5f87dd"
+    },
+    {
+      "id": "approval",
+      "kb": "public",
+      "filename": "approval.md",
+      "state": "published",
+      "text": "采购审批必须先核对预算，再由财务签字。",
+      "sha256": "8e4fd5a79df47e170f3546441a3a260723638290957fa6ff4b20e7a5ebd26f47"
+    },
+    {
+      "id": "privacy",
+      "kb": "public",
+      "filename": "privacy.md",
+      "state": "published",
+      "text": "访问控制要求每次读取资料都重新核对权限。",
+      "sha256": "3de737e85d937e91420096a521933e4c9a25df19b7c2f8eeb987dbea6f2f6647"
+    },
+    {
+      "id": "phrase",
+      "kb": "public",
+      "filename": "phrase.md",
+      "state": "published",
+      "text": "灾难恢复演练必须每季度进行一次。",
+      "sha256": "b0f4a527e0afcb57721b11c5afabfff6bc89537b9d9ccbefb92da4153ebddb0e"
+    },
+    {
+      "id": "reversed",
+      "kb": "public",
+      "filename": "reversed.md",
+      "state": "published",
+      "text": "灾难演练之后恢复测试账号。",
+      "sha256": "067f52ab277689d3de4a1d1116e7082726d063d64e290b5b2f04592975e03bfe"
+    },
+    {
+      "id": "private",
+      "kb": "private",
+      "filename": "private.md",
+      "state": "published",
+      "text": "PRIVATE-900 的内部口令策略只对维护者可见。",
+      "sha256": "d1a8a3d16f0f14d5ca48abccd05154ea556298cfae8aafdfc0d36e8f7d55d6e4"
+    },
+    {
+      "id": "draft",
+      "kb": "public",
+      "filename": "draft.md",
+      "state": "draft",
+      "text": "DRAFT-700 的草稿未通过正式发布。",
+      "sha256": "14c019296ddec873415a0f9147ddbbb40fd75aa9383b197e7b3962c0f41cd3e4"
+    },
+    {
+      "id": "pending",
+      "kb": "public",
+      "filename": "pending.md",
+      "state": "pending",
+      "text": "PENDING-800 的文件尚未通过安全检查。",
+      "sha256": "7bd5841015b1e2da36081e515b955919ea6c1502b9dbb2eb1e9d51260e91e49a"
+    },
+    {
+      "id": "restricted",
+      "kb": "public",
+      "filename": "restricted.md",
+      "state": "restricted",
+      "text": "RESTRICTED-600 的访问控制细则只限维护者。",
+      "sha256": "8eff525f67bacd2e50384399efb567b86bbc501a53b91183d067c0e04113b297"
+    },
+    {
+      "id": "zx2400",
+      "kb": "public",
+      "filename": "ZX-2400.md",
+      "text": "# ZX-2400\n\nZX-2400使用12伏直流电源，通信接口为RS-485。",
+      "state": "published",
+      "sha256": "86ceb2ab1f1df2120dc98f3837b931c71ddc5976f621c6408d26b1a4c226ef6a"
+    },
+    {
+      "id": "zx2401",
+      "kb": "public",
+      "filename": "ZX-2401.md",
+      "text": "# ZX-2401\n\nZX-2401使用24伏直流电源，通信接口为以太网。",
+      "state": "published",
+      "sha256": "aa39f12dade8e56b884efa4ca9653218b9cebab10653cdd56ea7e4eabcb117c8"
+    }
+  ],
+  "cases": [
+    {
+      "id": "L01",
+      "category": "identifier",
+      "query": "A-100 安装",
+      "expected_docs": [
+        "prod_a100"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L02",
+      "category": "identifier",
+      "query": "A-1000 安装",
+      "expected_docs": [
+        "prod_a1000"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L03",
+      "category": "identifier",
+      "query": "Ａ－１００ 安装",
+      "expected_docs": [
+        "prod_a100"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L04",
+      "category": "identifier",
+      "query": "XA-100 安装",
+      "expected_docs": [
+        "prod_xa100"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L05",
+      "category": "identifier",
+      "query": "E-17",
+      "expected_docs": [
+        "prod_a200"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L06",
+      "category": "abbreviation",
+      "query": "sso",
+      "expected_docs": [
+        "sso"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L07",
+      "category": "abbreviation",
+      "query": "SAML-2.0",
+      "expected_docs": [
+        "sso"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L08",
+      "category": "abbreviation",
+      "query": "API/v1",
+      "expected_docs": [
+        "api"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L09",
+      "category": "chinese_term",
+      "query": "采购审批",
+      "expected_docs": [
+        "approval"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L10",
+      "category": "chinese_term",
+      "query": "访问控制",
+      "expected_docs": [
+        "privacy"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L11",
+      "category": "chinese_term",
+      "query": "财务签字",
+      "expected_docs": [
+        "approval"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L12",
+      "category": "phrase",
+      "query": "\"灾难恢复演练\"",
+      "expected_docs": [
+        "phrase"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L13",
+      "category": "phrase",
+      "query": "\"蓝色接头\"",
+      "expected_docs": [
+        "prod_a100"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L14",
+      "category": "negative",
+      "query": "A-999 安装",
+      "expected_docs": [],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L15",
+      "category": "negative",
+      "query": "\"恢复灾难\"",
+      "expected_docs": [],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ]
+    },
+    {
+      "id": "L16",
+      "category": "permission",
+      "query": "PRIVATE-900",
+      "expected_docs": [],
+      "actor": "employee",
+      "scope": []
+    },
+    {
+      "id": "L17",
+      "category": "permission",
+      "query": "DRAFT-700",
+      "expected_docs": [],
+      "actor": "employee",
+      "scope": []
+    },
+    {
+      "id": "L18",
+      "category": "permission",
+      "query": "PENDING-800",
+      "expected_docs": [],
+      "actor": "employee",
+      "scope": []
+    },
+    {
+      "id": "L19",
+      "category": "permission",
+      "query": "RESTRICTED-600",
+      "expected_docs": [],
+      "actor": "employee",
+      "scope": []
+    },
+    {
+      "id": "L20",
+      "category": "identifier",
+      "query": "ZX-2400 的电源电压与通信接口是什么？",
+      "expected_docs": [
+        "zx2400"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ],
+      "baseline_case_id": "Q05"
+    },
+    {
+      "id": "L21",
+      "category": "identifier",
+      "query": "ZX-2401 和 ZX-2400 的电源与接口有什么不同？",
+      "expected_docs": [
+        "zx2400",
+        "zx2401"
+      ],
+      "actor": "employee",
+      "scope": [
+        "public"
+      ],
+      "baseline_case_id": "Q06"
+    }
+  ],
+  "challenge_origin": {
+    "baseline": "evals/baseline-v1/dataset.json",
+    "baseline_sha256": "948fd82cc540a4a5f9c90557ad8db1d07ab1ae9d9c841fce72cb9983f3bf3ed9",
+    "cases": [
+      "Q05",
+      "Q06"
+    ],
+    "interpretation": "Authored exact-match challenges; no real-model failure is asserted."
+  }
+}
