@@ -28,7 +28,9 @@ export class LifecycleStore extends CorrectionStore {
     deleteDocument(current: IdentityContext, document: string, etag: string | undefined, key: string, requestId: string) {
         if (!/^[A-Za-z0-9_-]{8,128}$/.test(key))
             fail(400, 'IDEMPOTENCY_KEY_REQUIRED');
-        return this.run(current, async (c, m) => {
+        return this.run(current,(c,m)=>this.deleteDocumentInTransaction(c,m,document,etag,key,requestId));
+    }
+    protected async deleteDocumentInTransaction(c:PoolClient,m:IdentityContext,document:string,etag:string|undefined,key:string,requestId:string){
             await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`delete:${m.tenant_id}:${m.membership_id}:${hash(key)}`]);
             const old = (await c.query('SELECT * FROM deletion_request WHERE tenant_id=$1 AND member_id=$2 AND key_hash=$3', [m.tenant_id, m.membership_id, hash(key)])).rows[0];
             if (old) {
@@ -59,7 +61,6 @@ export class LifecycleStore extends CorrectionStore {
             await this.cleanupEvent(c, row, 'deleted', m.membership_id);
             await this.audit(c, m, document, 'document.deleted', requestId);
             return cleanupView(row);
-        });
     }
     private async cleanupEvent(c: PoolClient, row: any, kind: string, member?: string, error?: string) { await c.query('INSERT INTO cleanup_event(tenant_id,cleanup_id,kind,member_id,error_code) VALUES($1,$2,$3,$4,$5)', [row.tenant_id, row.id, kind, member ?? null, error ?? null]); }
     getCleanup(current: IdentityContext, id: string) { return this.run(current, async (c, m) => { const row = (await c.query('SELECT * FROM document_cleanup WHERE tenant_id=$1 AND id=$2', [m.tenant_id, id])).rows[0]; if (!row)

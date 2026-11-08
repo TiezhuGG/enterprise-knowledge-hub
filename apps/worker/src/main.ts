@@ -1,3 +1,5 @@
+import {ConnectorRuntime} from './connectors';
+import {connectorSettings} from '@zhiheng/resources';
 import 'reflect-metadata';
 import {LifecycleRuntime} from './lifecycle';
 import {lifecyclePolicy} from '@zhiheng/resources';
@@ -13,12 +15,14 @@ class WorkerRuntime implements OnModuleInit, OnModuleDestroy {
   private worker?: Worker<DevelopmentPing>;
   private ingestion?: IngestionRuntime;
   private lifecycle?:LifecycleRuntime;
+  private connectors?:ConnectorRuntime;
   async onModuleInit() {
     const enabled=process.env.INGEST_ENABLED??(process.env.DATABASE_URL?'true':'false');
     if(!['true','false'].includes(enabled))throw new Error('Invalid INGEST_ENABLED');
     if(enabled==='true'){this.ingestion=new IngestionRuntime();await this.ingestion.start()}
     if(lifecyclePolicy().enabled){this.lifecycle=new LifecycleRuntime();await this.lifecycle.start()}
-    if(process.env.NODE_ENV==='production'){if(!this.ingestion&&!this.lifecycle)throw new Error('No production worker configured');return}
+    if(connectorSettings().enabled){this.connectors=new ConnectorRuntime();await this.connectors.start()}
+    if(process.env.NODE_ENV==='production'){if(!this.ingestion&&!this.lifecycle&&!this.connectors)throw new Error('No production worker configured');return}
     this.worker = new Worker<DevelopmentPing>(DEVELOPMENT_QUEUE, async job => {
       if (job.name !== DEVELOPMENT_JOB || typeof job.data?.nonce !== 'string') {
         throw new Error('Unsupported development job');
@@ -30,7 +34,7 @@ class WorkerRuntime implements OnModuleInit, OnModuleDestroy {
     await this.worker.waitUntilReady();
     console.log('Development worker ready');
   }
-  async onModuleDestroy() { await this.lifecycle?.stop();await this.ingestion?.stop(); await this.worker?.close(); }
+  async onModuleDestroy() { await this.connectors?.stop();await this.lifecycle?.stop();await this.ingestion?.stop(); await this.worker?.close(); }
 }
 @Module({ providers: [WorkerRuntime] })
 class WorkerModule {}

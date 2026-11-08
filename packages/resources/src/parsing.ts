@@ -61,6 +61,7 @@ export class ParsingStore extends IngestionStore {
   const scope=sha256(Buffer.from(JSON.stringify([member.tenant_id,member.membership_id,member.authz_version,member.role,doc,versionId,STRUCTURE_PARSER_VERSION,input.limit,input.page??null,input.block_id??null])));let after=-1;
   if(input.cursor){try{const [payload,signature,extra]=input.cursor.split('.');if(!payload||!signature||extra)throw new Error();const expected=createHmac('sha256',this.cursorSecret).update(payload).digest(),actual=Buffer.from(signature,'base64url');if(actual.length!==expected.length||!timingSafeEqual(actual,expected))throw new Error();const decoded=JSON.parse(Buffer.from(payload,'base64url').toString());if(decoded.scope!==scope||!Number.isInteger(decoded.after)||decoded.after<0)throw new Error();after=decoded.after}catch{fail(400,'INVALID_CURSOR')}}
   const result=await this.readParsedArtifact(row);
+  await this.version(client,member,doc,versionId);
   if(input.block_id&&!result.blocks.some(b=>b.id===input.block_id))fail(404,'RESOURCE_UNAVAILABLE');
   const selected=result.blocks.filter(b=>b.ordinal>after&&(input.page===undefined||b.source.page===input.page)&&(!input.block_id||b.id===input.block_id)),blocks=selected.slice(0,input.limit),more=selected.length>input.limit;let cursor:string|null=null;
   if(more){const payload=Buffer.from(JSON.stringify({scope,after:blocks.at(-1)!.ordinal})).toString('base64url');cursor=`${payload}.${createHmac('sha256',this.cursorSecret).update(payload).digest('base64url')}`}

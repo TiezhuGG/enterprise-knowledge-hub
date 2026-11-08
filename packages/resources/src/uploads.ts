@@ -11,7 +11,7 @@ import { validateUpload, verifyBytes, type UploadInput, type UploadLimits } from
 export class UploadStore extends ResourceStore {
   constructor(url:string|undefined,schema:string|undefined,secret:string|undefined,protected readonly objects:ObjectStore,readonly uploadLimits:UploadLimits) {super(url,schema,secret)}
   protected objectStorageIdentity(){return this.objects.storageIdentity}
-  private async quotaLock(client:PoolClient,tenant:string){await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`upload-quota:${tenant}`])}
+  protected async quotaLock(client:PoolClient,tenant:string){await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`upload-quota:${tenant}`])}
   private ticketView(row:any):UploadTicket {return {ticket_id:row.id,document_id:row.assigned_document_id,status:row.status,expires_at:row.expires_at.toISOString(),max_size:this.uploadLimits.maxBytes,
     upload:{method:'PUT',url:`/api/v1/upload-tickets/${row.id}/content`,headers:{'Content-Type':row.mime}},finalize_url:`/api/v1/upload-tickets/${row.id}/finalize`}}
   private async ticket(client:PoolClient,current:IdentityContext,id:string) {
@@ -56,7 +56,8 @@ export class UploadStore extends ResourceStore {
     const job=await ensureIngestionJob(client,tenant,versionId,ingestionConfig().maxAttempts);
     return {document_id:documentId,version_id:versionId,version_no:row.rows[0].version_no,job_id:job.id,status:job.status,status_url:`/api/v1/jobs/${job.id}`};
   }
-  finalizeUpload(current:IdentityContext,id:string,checksum:string,requestId:string){return this.run(current,async(client,member)=>{
+  finalizeUpload(current:IdentityContext,id:string,checksum:string,requestId:string){return this.run(current,(client,member)=>this.finalizeUploadInTransaction(client,member,id,checksum,requestId));}
+  protected async finalizeUploadInTransaction(client:PoolClient,member:IdentityContext,id:string,checksum:string,requestId:string){
     await this.quotaLock(client,member.tenant_id);const ticket=await this.ticket(client,member,id);
     if(checksum!==ticket.sha256)fail(422,'CONTENT_MISMATCH');
     if(ticket.status==='finalized')return this.result(client,member.tenant_id,ticket.assigned_document_id,ticket.version_id);
@@ -77,7 +78,7 @@ export class UploadStore extends ResourceStore {
     await client.query("INSERT INTO document_outbox(id,tenant_id,document_id,version_id,event_type) VALUES($1,$2,$3,$4,'document.version_created')",[randomUUID(),member.tenant_id,ticket.assigned_document_id,versionId]);
     await this.audit(client,member,ticket.assigned_document_id,'document.version_created',requestId);
     return this.result(client,member.tenant_id,ticket.assigned_document_id,versionId);
-  });}
+  }
   private versionView(row:any):DocumentVersion{return {id:row.id,document_id:row.document_id,version_no:row.version_no,filename:row.filename,size:row.size,mime:row.mime,sha256:row.content_sha256,scan_status:row.scan_status,created_at:row.created_at.toISOString(),is_latest:row.id===row.latest_version_id,is_published:row.id===row.published_version_id}}
   protected async version(client:PoolClient,member:IdentityContext,documentId:string,versionId:string,download=false){
     const doc=await this.doc(client,member,documentId,download?'download':'read');
@@ -99,6 +100,7 @@ export class UploadStore extends ResourceStore {
   sourceForDownload(current:IdentityContext,doc:string,version:string){return this.run(current,async(client,member)=>{
     const row=await this.version(client,member,doc,version,true);const bytes=await this.objects.read(row.object_key,row.object_version,row.size);
     if(bytes.length!==row.size||sha256(bytes)!==row.content_sha256)fail(422,'STORED_CONTENT_MISMATCH');
+    await this.version(client,member,doc,version,true);
     return {bytes,metadata:this.versionView(row)};
   });}
   checkDownload(current:IdentityContext,doc:string,version:string){return this.run(current,(client,member)=>this.version(client,member,doc,version,true).then(()=>{}))}

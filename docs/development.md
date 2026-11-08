@@ -101,3 +101,13 @@ P2-01 词法通道与中文术语见 [词法检索说明](p2-01-lexical-retrieva
 P2-02 并行候选、RRF与显式降级见 [混合检索说明](p2-02-hybrid-retrieval.md)。`npm run test:hybrid`验证融合和共享门禁；`npm run compare:retrieval -- --fixture --hybrid --output work/new-hybrid-comparison`运行同数据集的7策略对照与受控故障实验。默认仍为dense，无新增迁移或依赖。
 
 P2-03 本地重排适配与最终上下文预算见 [重排说明](p2-03-reranking-and-context.md)。`npm run test:reranking`验证权限、版本、超时回退和截断；`npm run compare:retrieval -- --fixture --rerank --output work/new-rerank-comparison`运行显式协议对照。默认RERANK_ENABLED=false，未部署真实服务时不作为模型效果验收。
+
+## P2-04 受控目录连接器
+
+应用迁移011后，按[连接器说明](p2-04-directory-connectors.md)在服务器绑定目录别名、租户/资料库和签名密钥；默认 CONNECTORS_ENABLED=false。API不接收路径或凭据。配置完成后重启API/Worker，在文档界面添加别名并同步。导入保持草稿，沿用扫描、索引、发布流程。
+
+```sh
+npm run test:connectors
+```
+
+集成测试需要 PostgreSQL、Redis 和开发版本化S3（Moto），使用隔离schema/bucket/临时目录，不读真实企业目录。测试独立Worker重启、重放、分批恢复、撤权及故障门禁。

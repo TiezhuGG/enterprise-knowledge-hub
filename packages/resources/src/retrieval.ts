@@ -42,7 +42,7 @@ export class RetrievalStore extends IndexingStore {
    JOIN document_version v ON v.tenant_id=d.tenant_id AND v.document_id=d.id AND v.id=d.published_version_id
    JOIN source_asset a ON a.tenant_id=v.tenant_id AND a.id=v.source_asset_id
    JOIN index_generation g ON g.tenant_id=d.tenant_id AND g.document_id=d.id AND g.version_id=v.id AND g.id=d.published_generation_id
-   WHERE d.tenant_id=$1 AND d.status='active' AND k.status='active' AND a.scan_status='clean' AND g.status='ready' AND g.indexed_count=g.chunk_count
+   WHERE d.tenant_id=$1 AND source_document_readable(d.tenant_id,d.id,$2) AND d.status='active' AND k.status='active' AND a.scan_status='clean' AND g.status='ready' AND g.indexed_count=g.chunk_count
    AND ($4::uuid[] IS NULL OR d.kb_id=ANY($4))
   ) visible WHERE 'read'=ANY(caps) ORDER BY id LIMIT 201`, [member.tenant_id, member.membership_id, ROLE_ACTIONS[member.role], kbs ?? null]);
         if (found.rows.length > MAX_SCOPE)

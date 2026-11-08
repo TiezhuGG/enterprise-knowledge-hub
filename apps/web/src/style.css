@@ -29,3 +29,10 @@ section { max-width: 720px; padding: 80px 0; }
 
 .knowledge-list .ant-list-item-meta-title, .correction-panel { overflow-wrap: anywhere; }
 .correction-panel .ant-space-item { min-width: 0; max-width: 100%; }
+
+.connectors-panel, .connector-detail { overflow-wrap: anywhere; }
+.connectors-panel .ant-space-item, .connector-detail .ant-space-item { min-width: 0; max-width: 100%; }
+@media (max-width: 600px) {
+  .connector-detail .ant-list-item { flex-direction: column; align-items: stretch; gap: 8px; }
+  .connector-detail .ant-list-item-action { margin-inline-start: 0; }
+}

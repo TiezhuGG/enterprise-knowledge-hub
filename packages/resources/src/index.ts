@@ -29,3 +29,6 @@ export {bm25,tokenize,lexicalQuery,normalizeLexical,LEXICAL_VERSION,DICTIONARY_H
 export {hybridOptions,reciprocalRankFusion,canDegrade} from './fusion';
 
 export {rerank,rerankProfile,rerankOptions,contextOptions,rerankInputs,validateRerank,RerankFailure} from './reranking';
+
+export {ConnectorStore} from './connectors';
+export * from './directory-source';

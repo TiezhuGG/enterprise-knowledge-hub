@@ -172,13 +172,14 @@ export class ResourceStore {
     if(row.acl_mode==='restricted') capabilities=capabilities.filter(a=>(row.doc_caps??[]).includes(a));
     if(!capabilities.includes('read') || row.kb_status!=='active' || row.status==='deleted') capabilities=[];
     if(row.status!=='active' && !capabilities.some(a=>['write','publish','manage'].includes(a))) capabilities=[];
+    if(row.source_readable===false)capabilities=capabilities.filter(a=>!['read','download'].includes(a));
     return {id:row.id,kb_id:row.kb_id,title:row.title,status:row.status,acl_mode:row.acl_mode,row_version:row.row_version,policy_version:row.policy_version,kb_policy_version:row.kb_policy_version,created_at:row.created_at.toISOString(),capabilities};
   }
   protected async doc(client:PoolClient,current:IdentityContext,id:string,action:ResourceAction='read',lock=false) {
     const location=await client.query('SELECT kb_id FROM document WHERE tenant_id=$1 AND id=$2',[current.tenant_id,id]);
     if(!location.rows[0])fail(404,'RESOURCE_UNAVAILABLE');
     await this.kb(client,current,location.rows[0].kb_id,undefined,lock);
-    const result=await client.query(`SELECT d.*,k.status AS kb_status,k.policy_version AS kb_policy_version,${kbCaps} AS kb_caps,${docCaps} AS doc_caps FROM document d JOIN knowledge_base k ON k.tenant_id=d.tenant_id AND k.id=d.kb_id WHERE d.tenant_id=$1 AND d.id=$4 AND k.status<>'deleted' ${lock?'FOR UPDATE OF d':'FOR SHARE OF d'}`,[...this.params(current),id]);
+    const result=await client.query(`SELECT d.*,source_document_readable(d.tenant_id,d.id,$2) AS source_readable,k.status AS kb_status,k.policy_version AS kb_policy_version,${kbCaps} AS kb_caps,${docCaps} AS doc_caps FROM document d JOIN knowledge_base k ON k.tenant_id=d.tenant_id AND k.id=d.kb_id WHERE d.tenant_id=$1 AND d.id=$4 AND k.status<>'deleted' ${lock?'FOR UPDATE OF d':'FOR SHARE OF d'}`,[...this.params(current),id]);
     const row=result.rows[0]; if(!row) fail(404,'RESOURCE_UNAVAILABLE');
     const view=this.documentView(row,current); if(!view.capabilities.includes(action)) fail(404,'RESOURCE_UNAVAILABLE'); return view;
   }
@@ -187,8 +188,8 @@ export class ResourceStore {
   listDocuments(member:IdentityContext,kbId:string,input:ListInput) { return this.run(member,async(client,current)=>{
     await this.kb(client,current,kbId,'read');
     const scope=this.scope(current,input,`documents:${kbId}`),after=this.cursor(input,scope);
-    const result=await client.query(`SELECT * FROM (SELECT *,CASE WHEN acl_mode='inherit' THEN kb_caps ELSE ARRAY(SELECT unnest(kb_caps) INTERSECT SELECT unnest(doc_caps)) END AS effective_caps FROM (SELECT d.*,k.status AS kb_status,k.policy_version AS kb_policy_version,${kbCaps} AS kb_caps,${docCaps} AS doc_caps FROM document d JOIN knowledge_base k ON k.tenant_id=d.tenant_id AND k.id=d.kb_id WHERE d.tenant_id=$1 AND d.kb_id=$4 AND d.status<>'deleted') raw) visible
-      WHERE 'read'=ANY(effective_caps) AND kb_status='active'
+    const result=await client.query(`SELECT * FROM (SELECT *,CASE WHEN acl_mode='inherit' THEN kb_caps ELSE ARRAY(SELECT unnest(kb_caps) INTERSECT SELECT unnest(doc_caps)) END AS effective_caps FROM (SELECT d.*,source_document_readable(d.tenant_id,d.id,$2) AS source_readable,k.status AS kb_status,k.policy_version AS kb_policy_version,${kbCaps} AS kb_caps,${docCaps} AS doc_caps FROM document d JOIN knowledge_base k ON k.tenant_id=d.tenant_id AND k.id=d.kb_id WHERE d.tenant_id=$1 AND d.kb_id=$4 AND d.status<>'deleted') raw) visible
+      WHERE 'read'=ANY(effective_caps) AND source_readable AND kb_status='active'
       AND (status='active' OR effective_caps && ARRAY['write','publish','manage']::text[])
       AND ($5::text IS NULL OR status=$5) AND position(lower($6) in lower(title))>0
       AND ($7::timestamptz IS NULL OR (created_at,id)<($7,$8::uuid)) ORDER BY created_at DESC,id DESC LIMIT $9`,[...this.params(current),kbId,input.status??null,input.q,after?.[0]??null,after?.[1]??null,input.limit+1]);
