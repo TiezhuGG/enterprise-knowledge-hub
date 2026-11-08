@@ -45,3 +45,7 @@ section { max-width: 720px; padding: 80px 0; }
 .lab-panel .ant-space-item { min-width: 0; max-width: 100%; }
 .lab-panel .ant-table-wrapper { overflow-x: auto; }
 @media (max-width: 600px) { .lab-panel .ant-list-item { flex-direction: column; align-items: stretch; gap: 8px; } .lab-panel .ant-list-item-action { margin-inline-start: 0; } }
+
+.feedback-panel { overflow-wrap: anywhere; }
+.feedback-panel .ant-space-item { min-width: 0; max-width: 100%; }
+@media (max-width: 600px) { .feedback-panel .ant-list-item { flex-direction: column; align-items: stretch; gap: 8px; } .feedback-panel .ant-list-item-action { margin-inline-start: 0; } }

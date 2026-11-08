@@ -51,7 +51,8 @@
     "test:reranking": "node --env-file-if-exists=.env --test scripts/reranking.integration.mjs",
     "test:connectors": "node --env-file-if-exists=.env --test scripts/connectors.integration.mjs",
     "test:releases": "node --env-file-if-exists=.env --test scripts/releases.integration.mjs",
-    "test:lab": "node --env-file-if-exists=.env --test scripts/lab.integration.mjs"
+    "test:lab": "node --env-file-if-exists=.env --test scripts/lab.integration.mjs",
+    "test:feedback": "node --env-file-if-exists=.env --test scripts/feedback.integration.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

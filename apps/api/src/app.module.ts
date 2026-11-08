@@ -1,3 +1,4 @@
+import {FeedbackController} from './resources/feedback.controller';
 import {LabController} from './resources/lab.controller';
 import {ReleasesController} from './resources/releases.controller';
 import {ConnectorsController} from './resources/connectors.controller';
@@ -26,5 +27,5 @@ class HealthController {
   }
 }
 
-@Module({ imports: [ResourcesModule], controllers: [HealthController, AuthController, KnowledgeController, DocumentController, UploadController, VersionsController, JobsController, SearchController, ChatController, CorrectionsController, LifecycleController, ConnectorsController, ReleasesController, LabController], providers: [AuthService, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ResourceFilter }] })
+@Module({ imports: [ResourcesModule], controllers: [HealthController, AuthController, KnowledgeController, DocumentController, UploadController, VersionsController, JobsController, SearchController, ChatController, CorrectionsController, LifecycleController, ConnectorsController, ReleasesController, LabController, FeedbackController], providers: [AuthService, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ResourceFilter }] })
 export class AppModule {}

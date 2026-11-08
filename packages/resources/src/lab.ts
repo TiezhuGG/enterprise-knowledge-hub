@@ -25,7 +25,7 @@ export class LabStore extends ReleaseStore {
         fail(409, 'IDEMPOTENCY_CONFLICT'); return { kh, ph, old: old?.result }; }
     private async labRemember(c: PoolClient, m: IdentityContext, key: any, result: any) { await c.query('INSERT INTO strategy_request VALUES($1,$2,$3,$4,$5)', [m.tenant_id, m.membership_id, key.kh, key.ph, JSON.stringify(result)]); return result; }
     private async baseline(c: PoolClient, m: IdentityContext, kb: string) { await this.labPermission(c, m, kb); const row = (await c.query('SELECT s.* FROM knowledge_base k JOIN retrieval_strategy s ON s.tenant_id=k.tenant_id AND s.id=k.active_strategy_id WHERE k.tenant_id=$1 AND k.id=$2', [m.tenant_id, kb])).rows[0]; const config = strategyConfig(row?.config ?? {}); return { row: row ?? null, config, hash: digest(JSON.stringify(config)) }; }
-    private async fingerprint(c: PoolClient, m: IdentityContext, kb: string) { await this.labPermission(c, m, kb); const targets = await this.eligible(c, m, [kb]); if (targets.length > 50)
+    protected async labFingerprint(c: PoolClient, m: IdentityContext, kb: string) { await this.labPermission(c, m, kb); const targets = await this.eligible(c, m, [kb]); if (targets.length > 50)
         fail(422, 'LAB_SCOPE_TOO_LARGE'); const scope = []; let count = 0; for (const t of targets) {
         const d = await this.doc(c, m, t.document_id, 'read'), receipts = (await c.query('SELECT chunk_id,retrieval_sha256 FROM index_receipt WHERE tenant_id=$1 AND generation_id=$2 ORDER BY chunk_id', [m.tenant_id, t.generation_id])).rows;
         count += receipts.length;
@@ -51,13 +51,13 @@ export class LabStore extends ReleaseStore {
         await c.query("UPDATE retrieval_experiment SET status='failed',error_code='LAB_EXECUTION_INTERRUPTED' WHERE tenant_id=$1 AND id=$2 AND status='running'", [m.tenant_id, id]);
         r.status = 'failed';
         r.error_code = 'LAB_EXECUTION_INTERRUPTED';
-    } if (r.status === 'completed' && (await this.fingerprint(c, m, r.kb_id)).hash !== r.scope_hash)
+    } if (r.status === 'completed' && (await this.labFingerprint(c, m, r.kb_id)).hash !== r.scope_hash)
         fail(409, 'LAB_SCOPE_CHANGED'); return { id: r.id, kb_id: r.kb_id, candidate_id: r.candidate_id, baseline_id: r.baseline_id, status: r.status, error_code: r.error_code, expired: r.expires_at < new Date(), report: r.status==='completed'&&r.expires_at > new Date() ? r.report : null, created_at: r.created_at, expires_at: r.expires_at }; }); }
     async runExperiment(current: IdentityContext, candidate: string, probes: LabProbe[], key: string, requestId: string, signal = AbortSignal.timeout(120000)) {
         if (!Array.isArray(probes) || !probes.length || probes.length > 10 || probes.some(p => typeof p.query !== 'string' || !p.query.trim() || p.query.length > 1200 || !Array.isArray(p.expected_document_ids) || p.expected_document_ids.length > 5 || p.expected_document_ids.some(id => typeof id !== 'string' || !/^[a-f0-9-]{36}$/.test(id)) || new Set(p.expected_document_ids).size !== p.expected_document_ids.length))
             fail(400, 'INVALID_LAB_PROBES');
         const start = await this.run(current, async (c, m) => { const req = await this.labRequest(c, m, key, ['experiment', candidate, probes]), version = await this.labVersion(c, m, candidate); if (req.old)
-            return { replay: req.old }; const base = await this.baseline(c, m, version.kb_id), scope = await this.fingerprint(c, m, version.kb_id);if(!scope.scope.length)fail(409,'LAB_NO_PUBLISHED_DOCUMENTS'); if (probes.some(p => p.expected_document_ids.some(id => !scope.scope.some(d => d.document_id === id))))
+            return { replay: req.old }; const base = await this.baseline(c, m, version.kb_id), scope = await this.labFingerprint(c, m, version.kb_id);if(!scope.scope.length)fail(409,'LAB_NO_PUBLISHED_DOCUMENTS'); if (probes.some(p => p.expected_document_ids.some(id => !scope.scope.some(d => d.document_id === id))))
             fail(400, 'PROBE_OUTSIDE_SCOPE'); const row = (await c.query('INSERT INTO retrieval_experiment(tenant_id,id,kb_id,member_id,candidate_id,baseline_id,scope_hash,baseline_hash,report) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *', [m.tenant_id, randomUUID(), version.kb_id, m.membership_id, version.id, base.row?.id ?? null, scope.hash, base.hash, '{}'])).rows[0]; await this.labRemember(c, m, req, { id: row.id }); await this.audit(c, m, version.kb_id, 'retrieval_experiment.started', requestId); return { row, version, base, scope }; });
         if (start.replay)
             return this.getExperiment(current, start.replay.id);
@@ -85,7 +85,7 @@ export class LabStore extends ReleaseStore {
             }
             const metrics = (side: 'baseline' | 'candidate') => ({ recall: rows.reduce((n, r) => n + r[side].recall, 0) / rows.length, mrr: rows.reduce((n, r) => n + r[side].mrr, 0) / rows.length, duration_ms: rows.reduce((n, r) => n + r[side].duration_ms, 0), degraded: rows.some(r => r[side].meta.degraded) }), old = metrics('baseline'), next = metrics('candidate'), report = { rows, baseline: old, candidate: next, positive_samples:probes.filter(p=>p.expected_document_ids.length>0).length,passed: probes.some(p=>p.expected_document_ids.length>0)&&!old.degraded && !next.degraded && next.recall >= old.recall && next.mrr >= old.mrr, sample_count: rows.length };
             await this.run(current, async (c, m) => { await this.labPermission(c, m, version.kb_id); if (signal.aborted)
-                fail(408, 'LAB_CANCELLED'); if ((await this.fingerprint(c, m, version.kb_id)).hash !== scope.hash)
+                fail(408, 'LAB_CANCELLED'); if ((await this.labFingerprint(c, m, version.kb_id)).hash !== scope.hash)
                 fail(409, 'LAB_SCOPE_CHANGED'); const active = await this.baseline(c, m, version.kb_id); if (active.row?.id !== base.row?.id || active.hash !== base.hash)
                 fail(409, 'LAB_BASELINE_CHANGED'); const saved = await c.query("UPDATE retrieval_experiment SET status='completed',report=$3 WHERE tenant_id=$1 AND id=$2 AND status='running' AND created_at>now()-interval '2 minutes'", [m.tenant_id, row.id, JSON.stringify(report)]); if (!saved.rowCount)
                 fail(409, 'LAB_EXECUTION_INTERRUPTED'); await this.audit(c, m, version.kb_id, 'retrieval_experiment.completed', requestId); });
@@ -101,7 +101,7 @@ export class LabStore extends ReleaseStore {
         return req.old; if (!etag)
         fail(428, 'IF_MATCH_REQUIRED'); if (etag !== kbEtag(k))
         fail(412, 'RESOURCE_VERSION_CHANGED'); const r = (await c.query("SELECT * FROM retrieval_experiment WHERE tenant_id=$1 AND id=$2 AND member_id=$3 AND candidate_id=$4 AND status='completed' AND expires_at>now()", [m.tenant_id, experiment, m.membership_id, id])).rows[0]; if (!r || !r.report.passed || !(r.report.positive_samples>0))
-        fail(409, 'STRATEGY_EVALUATION_REQUIRED'); if ((await this.fingerprint(c, m, version.kb_id)).hash !== r.scope_hash)
+        fail(409, 'STRATEGY_EVALUATION_REQUIRED'); if ((await this.labFingerprint(c, m, version.kb_id)).hash !== r.scope_hash)
         fail(409, 'LAB_SCOPE_CHANGED'); const base = await this.baseline(c, m, version.kb_id); if (base.row?.id !== (r.baseline_id ?? undefined) || base.hash !== r.baseline_hash)
         fail(409, 'LAB_BASELINE_CHANGED'); await c.query('UPDATE knowledge_base SET active_strategy_id=$3,row_version=row_version+1 WHERE tenant_id=$1 AND id=$2', [m.tenant_id, version.kb_id, id]); await c.query('INSERT INTO strategy_publication(tenant_id,kb_id,member_id,from_id,to_id,experiment_id,review_hash) VALUES($1,$2,$3,$4,$5,$6,$7)', [m.tenant_id, version.kb_id, m.membership_id, base.row?.id ?? null, id, experiment, digest(note.trim())]); await this.audit(c, m, version.kb_id, 'retrieval_strategy.published', requestId); return this.labRemember(c, m, req, { strategy: versionView(version), etag: kbEtag({ ...k, row_version: k.row_version + 1 }) }); }); }
     async experimentSource(current: IdentityContext, id: string, row: number, side: 'baseline' | 'candidate', ordinal: number) { if (!Number.isInteger(row) || row < 0 || row > 9 || !Number.isInteger(ordinal) || ordinal < 0 || ordinal > 19)

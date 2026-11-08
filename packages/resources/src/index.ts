@@ -38,3 +38,5 @@ export {ReleaseStore,type ReleaseProbe} from './releases';
 
 export {strategyConfig,requestConfig,strategyTrace,type StrategyConfig} from './strategy-config';
 export {LabStore,type LabProbe} from './lab';
+
+export {FeedbackStore,feedbackEtag,normalizeFeedbackQuestion,GAP_KINDS,GAP_STATES,type FeedbackInput,type FeedbackChange,type FeedbackList} from './feedback';

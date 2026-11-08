@@ -116,7 +116,7 @@ export class LifecycleStore extends CorrectionStore {
     }
     async purgeExpiredHistory() { if (!lifecyclePolicy().enabled)
         return 0; return transaction(this.pool, async (c) => { const tenants = (await c.query('SELECT DISTINCT tenant_id FROM chat_run WHERE content_purged_at IS NULL AND (content_expires_at<=now() OR EXISTS(SELECT 1 FROM conversation v WHERE v.tenant_id=chat_run.tenant_id AND v.id=chat_run.conversation_id AND v.deleted_at IS NOT NULL)) LIMIT 20')).rows; let n = 0; for (const t of tenants)
-        n += await this.scrubRuns(c, t.tenant_id); return n; }); }
+        n += await this.scrubRuns(c, t.tenant_id);const due=(await c.query('SELECT DISTINCT tenant_id FROM feedback_case WHERE content_purged_at IS NULL AND feedback_purge_due(tenant_id,id) LIMIT 20')).rows;for(const t of due)n+=Number((await c.query('SELECT purge_feedback_content($1) AS n',[t.tenant_id])).rows[0].n); return n; }); }
     /** Session advisory lock survives transaction boundaries; a crashed worker releases it automatically. */
     async cleanupTick() {
         if (!lifecyclePolicy().enabled)
@@ -199,6 +199,7 @@ export class LifecycleStore extends CorrectionStore {
         await this.pool!.query("UPDATE document_cleanup SET stage='metadata' WHERE tenant_id=$1 AND id=$2", [row.tenant_id, row.id]);
         await this.item(row, 'pg', { document_id: row.document_id }, () => transaction(this.pool, async (c) => {
             await this.scrubRuns(c, row.tenant_id, row.document_id);
+            await c.query('SELECT purge_feedback_content($1,$2)',args);
             await c.query("UPDATE correction_event e SET note='[内容已清理]',content_purged_at=now() FROM correction_case x WHERE x.tenant_id=e.tenant_id AND x.id=e.case_id AND x.tenant_id=$1 AND x.document_id=$2 AND e.content_purged_at IS NULL", args);
             await c.query("UPDATE correction_case SET description='[关联来源已删除，正文已清理]',verification_note=NULL,resolution_note=NULL,closure_evidence=NULL,content_purged_at=now(),row_version=row_version+1,updated_at=now() WHERE tenant_id=$1 AND document_id=$2 AND content_purged_at IS NULL", args);
             // Cache reservations and deletion share the same tenant/profile lock. Preserve any other live reference.

@@ -44,6 +44,7 @@ jobs:
       - run: npm run test:connectors
       - run: npm run test:releases
       - run: npm run test:lab
+      - run: npm run test:feedback
       - name: Worker queue and independent restart
         run: |
           node --env-file=.env apps/worker/dist/main.js > /tmp/worker.log 2>&1 &
