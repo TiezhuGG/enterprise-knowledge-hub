@@ -5,11 +5,12 @@ export interface AnswerHooks {evidence?:(sources:SearchEvidence[])=>Promise<void
 export class AnswerStore extends RetrievalStore {
  private readonly answering=new Set<string>();
  async answer(current:IdentityContext,input:SearchInput,signal=AbortSignal.timeout(95000),hooks:AnswerHooks={}):Promise<AnswerResponse>{
+  input=await this.resolveSearch(current,input);
   const key=`${current.tenant_id}:${current.membership_id}`;
   if(this.answering.has(key)||this.answering.size>=2)fail(429,'ANSWER_BUSY');this.answering.add(key);
-  const base:AnswerResponse={answer_id:randomUUID(),status:'refused',message:'当前证据不足，无法可靠回答。请补充资料或明确问题。',reason:'insufficient_evidence',claims:[],sources:[],model:null,usage:{prompt_tokens:null,completion_tokens:null}};
+  const base:AnswerResponse={strategy:input.strategy_trace,answer_id:randomUUID(),status:'refused',message:'当前证据不足，无法可靠回答。请补充资料或明确问题。',reason:'insufficient_evidence',claims:[],sources:[],model:null,usage:{prompt_tokens:null,completion_tokens:null}};
   try{
-   await hooks.progress?.('retrieving');const evidence=await this.search(current,input,signal);if(input.mode==='hybrid')base.retrieval=evidence.meta;await hooks.evidence?.(evidence.data);if(!evidence.data.length){if(evidence.meta.degraded)return {...base,status:'failed',reason:'retrieval_incomplete',message:'检索仅完成部分通道，当前结果不足以回答。'};return base;}
+   await hooks.progress?.('retrieving');const evidence=await this.search(current,input,signal);base.retrieval=evidence.meta;await hooks.evidence?.(evidence.data);if(!evidence.data.length){if(evidence.meta.degraded)return {...base,status:'failed',reason:'retrieval_incomplete',message:'检索仅完成部分通道，当前结果不足以回答。'};return base;}
    let profile;try{profile=generationProfile()}catch{return {...base,status:'failed',reason:'generation_unavailable',message:'本地生成服务尚未配置完成。'}}
    if(!profile)return {...base,status:'failed',reason:'generation_unavailable',message:'本地生成服务尚未配置完成。'};
    base.model={name:profile.model,revision:profile.revision,prompt_version:'extractive-v1'};

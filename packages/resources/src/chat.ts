@@ -60,13 +60,13 @@ export class ChatStore extends AnswerStore {
             if (input.kb_ids)
                 for (const kb of [...input.kb_ids].sort())
                     await this.kb(c, m, kb, 'read');
-            const id = randomUUID();
-            await c.query("INSERT INTO chat_run(tenant_id,id,conversation_id,member_id,question_message_id,message_id,parent_run_id,idempotency_hash,payload_hash,input,status,stage,content_expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'running','queued',now()+($11::int*interval '1 day'))", [m.tenant_id, id, conversation, m.membership_id, randomUUID(), randomUUID(), parent ?? null, kh, ph, JSON.stringify(input),lifecyclePolicy().historyDays]);
+            const resolved=await this.resolveSearchInTransaction(c,m,input);const id = randomUUID();
+            await c.query("INSERT INTO chat_run(tenant_id,id,conversation_id,member_id,question_message_id,message_id,parent_run_id,idempotency_hash,payload_hash,input,status,stage,content_expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'running','queued',now()+($11::int*interval '1 day'))", [m.tenant_id, id, conversation, m.membership_id, randomUUID(), randomUUID(), parent ?? null, kh, ph, JSON.stringify(resolved),lifecyclePolicy().historyDays]);
             await this.event(c, m.tenant_id, id, 'run.started', { stage: 'queued' });
-            return { id, fresh: true };
+            return { id, fresh: true,input:resolved };
         });
         if (created.fresh) {
-            const abort = new AbortController(), done = this.executeChat(current, created.id, input, abort).catch(() => { });
+            const abort = new AbortController(), done = this.executeChat(current, created.id, created.input!, abort).catch(() => { });
             this.executions.set(created.id, { abort, done });
             void done.finally(() => this.executions.delete(created.id));
         }
@@ -129,7 +129,7 @@ export class ChatStore extends AnswerStore {
         await this.run(current, (c, m) => this.expire(c, m.tenant_id, m.membership_id));
         const row = await this.run(current, async (c, m) => { const r = (await c.query('SELECT r.*,f.value AS feedback FROM chat_run r LEFT JOIN chat_feedback f ON f.tenant_id=r.tenant_id AND f.run_id=r.id AND f.member_id=r.member_id WHERE r.tenant_id=$1 AND r.id=$2 AND r.member_id=$3', [m.tenant_id, id, m.membership_id])).rows[0]; if (!r)
             fail(404, 'RESOURCE_UNAVAILABLE'); await this.owner(c, m, r.conversation_id); return r; });
-        const view = (answer: AnswerResponse | null, status: ChatRun['status'] = row.status): ChatRun => ({ id: row.id, conversation_id: row.conversation_id, question_message_id: row.question_message_id, message_id: row.message_id, parent_run_id: row.parent_run_id, question: status==='expired'?'[历史内容已清理]':row.input.query, status, stage: row.stage, last_event_id: row.last_event_id, answer, error_code: status === 'restricted' ? 'ACCESS_CHANGED' : row.error_code, feedback: status==='expired'?null:row.feedback ?? null, created_at: row.created_at.toISOString(), events_url: `/api/v1/chat-runs/${id}/events`, status_url: `/api/v1/chat-runs/${id}`, cancel_url: `/api/v1/chat-runs/${id}/cancel` });
+        const view = (answer: AnswerResponse | null, status: ChatRun['status'] = row.status): ChatRun => ({ strategy:['restricted','expired'].includes(status)?undefined:row.input.strategy_trace,id: row.id, conversation_id: row.conversation_id, question_message_id: row.question_message_id, message_id: row.message_id, parent_run_id: row.parent_run_id, question: status==='expired'?'[历史内容已清理]':row.input.query, status, stage: row.stage, last_event_id: row.last_event_id, answer, error_code: status === 'restricted' ? 'ACCESS_CHANGED' : row.error_code, feedback: status==='expired'?null:row.feedback ?? null, created_at: row.created_at.toISOString(), events_url: `/api/v1/chat-runs/${id}/events`, status_url: `/api/v1/chat-runs/${id}`, cancel_url: `/api/v1/chat-runs/${id}/cancel` });
         if(row.content_purged_at||row.content_expires_at.getTime()<=Date.now())return view(null,'expired');
         let sourceChecked = false;
         try {

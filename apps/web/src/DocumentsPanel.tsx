@@ -1,3 +1,4 @@
+import {LabPanel} from './LabPanel';
 import {ReleasesPanel} from './ReleasesPanel';
 import {ConnectorsPanel} from './ConnectorsPanel';
 import {CleanupsPanel} from './CleanupsPanel';
@@ -65,6 +66,7 @@ export function DocumentsPanel({kb,session,onExpired}:{kb:KnowledgeBase;session:
   async function removeDocument(){if(!deleting)return;setBusy(true);setError('');try{await request(`/documents/${deleting.id}`,{method:'DELETE',headers:{'If-Match':deleteEtag,'Idempotency-Key':deleteKey}});if(target?.id===deleting.id)chooseTarget(null);setDeleting(null);setMessage('文档访问已失效，物理清理进度见删除与清理记录。');await refresh()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
   return <Space direction="vertical" size="middle" style={{width:'100%'}}>
     <Modal title="删除文档" open={!!deleting} onCancel={()=>setDeleting(null)} onOk={()=>void removeDocument()} okText="确认删除" okButtonProps={{danger:true}} confirmLoading={busy}><Typography.Paragraph>删除“{deleting?.title}”后无法恢复；原文、历史引用和后续检索会立即不可用。对象和向量在保留期后异步清理，可查看处理记录。</Typography.Paragraph>{error&&<Alert type="error" message={error}/>}</Modal>
+    {['manage','read'].every(a=>kb.capabilities.includes(a as never))&&<LabPanel kb={kb} session={session} onExpired={onExpired}/>}
     {['manage','read','write','publish'].every(a=>kb.capabilities.includes(a as never))&&<ReleasesPanel kb={kb} session={session} onExpired={onExpired}/>}
     {kb.capabilities.includes('manage')&&<ConnectorsPanel kb={kb} session={session} onExpired={onExpired}/>}
     {kb.capabilities.includes('delete')&&<CleanupsPanel key={message} kb={kb} session={session} onExpired={onExpired}/>}

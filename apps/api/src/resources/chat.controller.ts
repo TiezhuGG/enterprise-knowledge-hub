@@ -76,7 +76,7 @@ export class ChatController {
     @Headers('idempotency-key')
     key = '', 
     @Res({ passthrough: true })
-    res: Response) { noStore(res); const b = object(raw, ['conversation_id', 'message', 'kb_ids', 'top_k', 'mode', 'min_score', 'max_characters', 'hybrid', 'rerank', 'context']), { conversation_id, message, ...search } = b; return this.store.createChatRun(req.identity!, id(conversation_id), searchInput({ ...search, query: message }), key).then(data => ({ data })); }
+    res: Response) { noStore(res); const b = object(raw, ['conversation_id', 'message', 'kb_ids', 'top_k', 'mode', 'min_score', 'max_characters', 'hybrid', 'rerank', 'context', 'strategy_mode']), { conversation_id, message, ...search } = b; return this.store.createChatRun(req.identity!, id(conversation_id), searchInput({ ...search, query: message }), key).then(data => ({ data })); }
     @Get('chat-runs/:runId')
     getRun(
     @Req()

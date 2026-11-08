@@ -5,7 +5,7 @@ import { bm25, lexicalQuery, LEXICAL_VERSION, DICTIONARY_HASH } from './lexical'
 import { createHmac, createHash, timingSafeEqual, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import type { IdentityContext, SearchInput, SearchResponse, SearchEvidence, KnowledgeChunk, FusionEvidence, RerankMeta } from '@zhiheng/contracts';
-import { IndexingStore } from './indexing';
+import {StrategyStore} from './strategies';
 import { kbCaps, docCaps } from './store';
 import { ROLE_ACTIONS, ResourceError, fail } from './policy';
 import { embeddingProfile, embedQuery, IndexFailure } from './embedding';
@@ -31,9 +31,9 @@ type Candidate = {
     };
 };
 const candidateKey = (c: Candidate) => [c.target.document_id, c.target.version_id, c.target.generation_id, c.chunk.id].join(':');
-export class RetrievalStore extends IndexingStore {
+export class RetrievalStore extends StrategyStore {
     private readonly reranking = new Set<string>();
-    private async eligible(client: PoolClient, member: IdentityContext, kbs?: string[]): Promise<Target[]> {
+    protected async eligible(client: PoolClient, member: IdentityContext, kbs?: string[]): Promise<Target[]> {
         if (kbs)
             for (const kb of [...kbs].sort())
                 await this.kb(client, member, kb, 'read');
@@ -87,6 +87,9 @@ export class RetrievalStore extends IndexingStore {
     }
     private evidence(member: IdentityContext, target: Target, chunk: KnowledgeChunk, version: number, download: boolean, rank: number | null, score: number | null): SearchEvidence { return { evidence_id: rank === null ? null : `E${rank}`, document_id: target.document_id, version_id: target.version_id, version_no: version, generation_id: target.generation_id, chunk_id: chunk.id, title: target.title, snippet: chunk.text, heading_path: chunk.heading_path, spans: chunk.spans, rank, score, citation_id: this.sign(member, target, chunk.id), download_url: download ? `/api/v1/documents/${target.document_id}/versions/${target.version_id}/content` : null }; }
     async search(current: IdentityContext, input: SearchInput, signal?: AbortSignal, requestId?: string): Promise<SearchResponse> {
+        input=await this.resolveSearch(current,input);const result=await this.searchResolved(current,input,signal,requestId);return {...result,meta:{...result.meta,strategy:input.strategy_trace}};
+    }
+    private async searchResolved(current:IdentityContext,input:SearchInput,signal?:AbortSignal,requestId?:string):Promise<SearchResponse>{
         signal = signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000);
         const searchId = requestId ?? randomUUID();
         if (input.mode === 'lexical')

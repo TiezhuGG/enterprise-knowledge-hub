@@ -35,3 +35,6 @@ export * from './directory-source';
 
 export * from './index-profiles';
 export {ReleaseStore,type ReleaseProbe} from './releases';
+
+export {strategyConfig,requestConfig,strategyTrace,type StrategyConfig} from './strategy-config';
+export {LabStore,type LabProbe} from './lab';

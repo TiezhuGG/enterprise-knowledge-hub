@@ -1,7 +1,7 @@
 import {CorrectionsPanel} from './CorrectionsPanel';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Input, Modal, Select, Space, Tag, Typography } from 'antd';
-import type { ChatRun, Conversation, ResourcePage, SearchEvidence, SessionInfo, ChatEvent } from '@zhiheng/contracts';
+import type { ChatRun, Conversation, ResourcePage, SearchEvidence, SessionInfo, ChatEvent, KnowledgeBase } from '@zhiheng/contracts';
 import { applyChatEvent, liveChat, stageLabel, type LiveChat } from './chat-events';
 const terminal = (r: ChatRun) => r.status !== 'running';
 export function AnswerPanel({ session, onExpired }: {
@@ -10,6 +10,7 @@ export function AnswerPanel({ session, onExpired }: {
 }) {
     const scope = `zhiheng.chat:${session.identity.tenant_id}:${session.identity.membership_id}`;
     const [correctionSource,setCorrectionSource]=useState<SearchEvidence|null>(null);
+    const [kbScope,setKbScope]=useState(''),[kbOptions,setKbOptions]=useState<KnowledgeBase[]>([]),[kbNext,setKbNext]=useState<string|null>(null);
     const [question, setQuestion] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [conversations, setConversations] = useState<Conversation[]>([]), [selected, setSelected] = useState(''), [runs, setRuns] = useState<ChatRun[]>([]), [live, setLive] = useState<LiveChat | null>(null), [connection, setConnection] = useState(''), [source, setSource] = useState<{
         evidence: SearchEvidence;
         quote: string;
@@ -18,6 +19,7 @@ export function AnswerPanel({ session, onExpired }: {
         key: string;
         conversation: string;
         question: string;
+        kb_id: string;
     } | null>(null);
     const remember = (id: string) => { try {
         sessionStorage.setItem(scope, id);
@@ -29,7 +31,7 @@ export function AnswerPanel({ session, onExpired }: {
             throw new Error('登录已失效，请重新登录。');
         }
         const e = await r.json().catch(() => ({}));
-        throw new Error(r.status === 409 ? '当前会话仍有运行中的请求，或提交信息已变化，请恢复会话。' : r.status === 429 ? '请求或连接过多，请等待后重试。' : r.status === 404 ? '会话或来源不可用，请刷新。' : `请求未完成（${e.error?.code ?? r.status}）。`);
+        throw new Error(e.error?.code==='STRATEGY_SCOPE_REQUIRED'?'请选择一个问答资料库以使用已发布策略。':r.status === 409 ? '当前会话仍有运行中的请求，或提交信息已变化，请恢复会话。' : r.status === 429 ? '请求或连接过多，请等待后重试。' : r.status === 404 ? '会话或来源不可用，请刷新。' : `请求未完成（${e.error?.code ?? r.status}）。`);
     } return r.json(); }
     function stopStream() { stream.current?.close(); stream.current = null; liveRef.current = null; setLive(null); }
     async function list(cursor?: string) { const p: ResourcePage<Conversation> = await request(`/conversations?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`); setConversations(old => cursor ? [...new Map([...old,...p.data].map(c=>[c.id,c])).values()] : p.data); setMore(p.page.next_cursor); }
@@ -146,9 +148,9 @@ export function AnswerPanel({ session, onExpired }: {
             }
             const previous = submission.current;
             if (!previous)
-                submission.current = { key: crypto.randomUUID(), conversation, question: question.trim() };
+                submission.current = { key: crypto.randomUUID(), conversation, question: question.trim(),kb_id:kbScope };
             const pending = submission.current!;
-            const run: ChatRun = (await request('/chat-runs', 'POST', { conversation_id: pending.conversation, message: pending.question }, { 'Idempotency-Key': pending.key })).data;
+            const run: ChatRun = (await request('/chat-runs', 'POST', { conversation_id: pending.conversation, message: pending.question,kb_ids:pending.kb_id?[pending.kb_id]:undefined,strategy_mode:'active' }, { 'Idempotency-Key': pending.key })).data;
             if (epoch.current !== version)
                 return;
             submission.current = null;
@@ -213,15 +215,18 @@ export function AnswerPanel({ session, onExpired }: {
         setError((e as Error).message);
         await loadMessages(run.conversation_id, version).catch(() => { });
     } }
+    async function loadKb(cursor?:string){try{const v=await request(`/knowledge-bases?limit=100${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`);setKbOptions(old=>cursor?[...old,...v.data]:v.data);setKbNext(v.page.next_cursor)}catch{}}
+    useEffect(()=>{void loadKb()},[]);
     const active = runs.find(r => r.status === 'running'), display = [...runs].reverse();
     return <Card title="带引用的流式问答"><Space direction="vertical" size="middle" style={{ width: '100%' }}><Typography.Text type="secondary">先核验原文与权限，再输出摘录。每条问题独立检索，请在追问中写明主题。切换会话不会停止后台请求。</Typography.Text>
+ <Space wrap><Select aria-label="问答资料库范围" disabled={busy||!!active} style={{width:240,maxWidth:'100%'}} value={kbScope} onChange={v=>{setKbScope(v);submission.current=null}} options={[{value:'',label:'全部可读资料库'},...kbOptions.filter(k=>k.capabilities.includes('read')&&k.status==='active').map(k=>({value:k.id,label:k.name}))]}/><Button disabled={busy} onClick={()=>void loadKb()}>刷新问答范围</Button>{kbNext&&<Button onClick={()=>void loadKb(kbNext)}>加载更多问答资料库</Button>}</Space>
  <Space wrap><Select aria-label="问答历史会话" style={{ width: 240, maxWidth: '100%' }} value={selected || undefined} placeholder="选择历史会话" onChange={id => void select(id)} options={conversations.map(c => ({ value: c.id, label: `${c.title} · ${new Date(c.created_at).toLocaleString()}` }))}/><Button disabled={busy} onClick={() => void select('')}>新建会话</Button><Button disabled={busy} onClick={() => { const version=++epoch.current;setRuns([]); setSource(null); stopStream(); if (selected)
         void loadMessages(selected, version).catch(e => setError(e.message)); void list().catch(e => setError(e.message)); }}>恢复会话状态</Button>{more && <Button onClick={() => void list(more)}>加载更多会话</Button>}{selected && <Button disabled={busy || !!active} danger onClick={() => { void request(`/conversations/${selected}`, 'DELETE').then(async () => { await select(''); await list(); }).catch(e => setError(e.message)); }}>删除当前会话</Button>}</Space>
  {error && <Alert role="alert" type="error" showIcon message={error}/>}{connection && <Typography.Text role="status">{connection}</Typography.Text>}
  {older && <Button onClick={() => void loadMessages(selected, epoch.current, older).catch(e => setError(e.message))}>加载更早消息</Button>}
  <div aria-label="问答消息记录">{display.map(run => {
             const current = live?.id === run.id ? live : null, quotes = current && Object.keys(current.quotes).length ? Object.entries(current.quotes).map(([i, c]) => ({ ...c, index: Number(i) })) : run.answer?.claims.map((c, index) => ({ ...c, index })) ?? [];
-            return <Card key={run.id} size="small" className="chat-message" title={<Space><Tag>我的问题</Tag><span>{run.question}</span></Space>}><Space direction="vertical" style={{ width: '100%' }}>{run.answer?.retrieval?.degraded&&<Alert type="warning" showIcon message="本次回答的检索或重排发生降级，请核对来源与处理状态。"/>}<Typography.Text role="status">{run.status === 'running' ? stageLabel[current?.stage ?? run.stage] : run.status === 'cancelled' ? '已停止；未产生完整回答。' : run.status === 'expired' ? '历史内容已到保留期限或已随来源清理。' : run.status === 'restricted' ? '依据的访问权限已变化，回答已隐藏。' : run.status === 'failed' ? `本次运行失败（${run.error_code ?? '服务不可用'}），不作为完整回答。` : run.answer?.message ?? '运行已结束。'}</Typography.Text>
+            return <Card key={run.id} size="small" className="chat-message" title={<Space><Tag>我的问题</Tag><span>{run.question}</span></Space>}><Space direction="vertical" style={{ width: '100%' }}>{run.strategy&&<Typography.Text type="secondary">本次策略：{run.strategy.version?`v${run.strategy.version}`:'请求配置'} · {run.strategy.config_hash.slice(0,12)}</Typography.Text>}{run.answer?.retrieval?.degraded&&<Alert type="warning" showIcon message="本次回答的检索或重排发生降级，请核对来源与处理状态。"/>}<Typography.Text role="status">{run.status === 'running' ? stageLabel[current?.stage ?? run.stage] : run.status === 'cancelled' ? '已停止；未产生完整回答。' : run.status === 'expired' ? '历史内容已到保留期限或已随来源清理。' : run.status === 'restricted' ? '依据的访问权限已变化，回答已隐藏。' : run.status === 'failed' ? `本次运行失败（${run.error_code ?? '服务不可用'}），不作为完整回答。` : run.answer?.message ?? '运行已结束。'}</Typography.Text>
  {quotes.map(c => { const e = current?.sources[c.evidence_id] ?? run.answer?.sources.find(s => s.evidence_id === c.evidence_id); return e && <div key={c.index}><blockquote className="parsed-text">{c.quote}</blockquote><Button type="link" onClick={() => void verify(run, e, c.quote)}>{c.evidence_id} · {e.title} · v{e.version_no} · 定位原文</Button></div>; })}
  <Space wrap>{run.status === 'running' && <Button disabled={busy} danger onClick={() => void cancel(run)}>停止本次回答</Button>}{terminal(run) && run.status!=='expired' && <Button disabled={busy || !!active} onClick={() => void regenerate(run)}>重新生成</Button>}{run.status === 'completed' && run.answer && <><Button aria-pressed={run.feedback === 'helpful'} onClick={() => void vote(run, 'helpful')}>有帮助{run.feedback === 'helpful' ? ' ✓' : ''}</Button><Button aria-pressed={run.feedback === 'unhelpful'} onClick={() => void vote(run, 'unhelpful')}>无帮助{run.feedback === 'unhelpful' ? ' ✓' : ''}</Button></>}</Space></Space></Card>;
         })}</div>
