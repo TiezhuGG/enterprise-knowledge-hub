@@ -32,3 +32,6 @@ export {rerank,rerankProfile,rerankOptions,contextOptions,rerankInputs,validateR
 
 export {ConnectorStore} from './connectors';
 export * from './directory-source';
+
+export * from './index-profiles';
+export {ReleaseStore,type ReleaseProbe} from './releases';

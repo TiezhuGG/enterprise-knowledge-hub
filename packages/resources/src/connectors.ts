@@ -134,7 +134,7 @@ export class ConnectorStore extends LifecycleStore {
         await c.query('UPDATE source_item SET source_readers=$4,state=$5,security_seq=GREATEST(security_seq,$6),updated_at=now() WHERE tenant_id=$1 AND connector_id=$2 AND external_id=$3', [row.tenant_id, row.id, item.external_id, readers, state, seq]);
         if (item.document_id) {
             await c.query('DELETE FROM acl_entry WHERE tenant_id=$1 AND document_id=$2', [row.tenant_id, item.document_id]);
-            await c.query('INSERT INTO acl_entry(tenant_id,id,document_id,member_id,actions) VALUES($1,$2,$3,$4,$5)', [row.tenant_id, randomUUID(), item.document_id, row.owner_id, ['read', 'write', 'delete', 'manage', 'manage_acl', ...(valid && mapped.some(p => p.type === 'member' && p.id === row.owner_id) ? ['download'] : [])]]);
+            await c.query('INSERT INTO acl_entry(tenant_id,id,document_id,member_id,actions) VALUES($1,$2,$3,$4,$5)', [row.tenant_id, randomUUID(), item.document_id, row.owner_id, ['read', 'write', 'publish', 'delete', 'manage', 'manage_acl', ...(valid && mapped.some(p => p.type === 'member' && p.id === row.owner_id) ? ['download'] : [])]]);
             if (valid)
                 for (const p of mapped) {
                     if (p.type === 'member' && p.id === row.owner_id)

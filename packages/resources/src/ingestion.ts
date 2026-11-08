@@ -8,7 +8,7 @@ import { ROLE_ACTIONS, ResourceError, fail } from './policy';
 import { sha256, type ObjectStore } from './objects';
 import type { UploadLimits } from './upload-validation';
 import { ingestionConfig, type IngestionConfig } from './job-contract';
-export interface AttemptLease {tenant_id:string;job_id:string;run_no:number;lease_token:string;source:{key:string;version:string;size:number;sha256:string;mime:string;filename:string};checkpoint:boolean;parser_version:string}
+export interface AttemptLease {tenant_id:string;job_id:string;run_no:number;lease_token:string;source:{key:string;version:string;size:number;sha256:string;mime:string;filename:string};checkpoint:boolean;parser_version:string;indexing_profile_hash?:string}
 const terminal=new Set(['succeeded','failed','cancelled']);
 const manualRetry=new Set(['SOURCE_UNAVAILABLE','LEASE_EXPIRED','WORKER_DEADLINE','WORKER_ERROR','ACCESS_REVOKED','PARSE_TIMEOUT','PARSE_RESOURCE_LIMIT','PARSER_START_FAILED','PARSER_FAILED','CHUNK_TIMEOUT','EMBEDDING_UNAVAILABLE','EMBEDDING_AUTH_FAILED','EMBEDDING_RATE_LIMIT','EMBEDDING_BUSY','VECTOR_STORE_UNAVAILABLE','VECTOR_VERIFICATION_FAILED','INDEX_PROFILE_UNAVAILABLE']);
 export class IngestionStore extends UploadStore {
@@ -87,7 +87,7 @@ export class IngestionStore extends UploadStore {
     const lease=randomUUID();const updated=await this.change(client,row,{status:'running',stage:'checking_source',attempt_count:row.attempt_count+1,total_attempts:row.total_attempts+1,error_code:null,dead_letter:false,lease_token:lease,worker_id:workerId,lease_until:new Date(now+this.config.leaseMs),deadline_at:new Date(now+this.config.deadlineMs),heartbeat_at:new Date(now)});
     await client.query("INSERT INTO ingestion_attempt(tenant_id,job_id,run_no,attempt_no,lease_token,worker_id,executor_id,status,write_protocol) VALUES($1,$2,$3,$4,$5,$6,$7,'running','tracked-v1')",[row.tenant_id,row.id,row.run_no,updated.attempt_count,lease,workerId,row.executor_id]);
     const checkpoint=await client.query("SELECT 1 FROM ingestion_checkpoint WHERE tenant_id=$1 AND job_id=$2 AND step='source_integrity' AND input_sha256=$3",[row.tenant_id,row.id,source.sha256]);
-    return {tenant_id:row.tenant_id,job_id:row.id,run_no:row.run_no,lease_token:lease,source:{key:source.object_key,version:source.object_version,size:source.size,sha256:source.sha256,mime:source.mime,filename:source.filename},checkpoint:!!checkpoint.rowCount,parser_version:row.parser_version};
+    return {tenant_id:row.tenant_id,job_id:row.id,run_no:row.run_no,lease_token:lease,source:{key:source.object_key,version:source.object_version,size:source.size,sha256:source.sha256,mime:source.mime,filename:source.filename},checkpoint:!!checkpoint.rowCount,parser_version:row.parser_version,indexing_profile_hash:row.indexing_profile_hash??(await client.query('SELECT active_index_profile_hash FROM knowledge_base WHERE tenant_id=$1 AND id=$2',[row.tenant_id,row.kb_id])).rows[0]?.active_index_profile_hash??undefined};
   });}
   heartbeat(lease:AttemptLease){return transaction(this.pool,async client=>{
     const result=await client.query("UPDATE ingestion_job SET lease_until=now()+$5*interval '1 millisecond',heartbeat_at=now() WHERE tenant_id=$1 AND id=$2 AND run_no=$3 AND lease_token=$4 AND status='running' AND lease_until>clock_timestamp() AND deadline_at>clock_timestamp() AND cancel_requested_at IS NULL",[lease.tenant_id,lease.job_id,lease.run_no,lease.lease_token,this.config.leaseMs]);return !!result.rowCount;

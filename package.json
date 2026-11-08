@@ -49,7 +49,8 @@
     "compare:retrieval": "node --env-file-if-exists=.env scripts/compare-retrieval.mjs",
     "test:hybrid": "node --env-file-if-exists=.env --test scripts/hybrid.integration.mjs",
     "test:reranking": "node --env-file-if-exists=.env --test scripts/reranking.integration.mjs",
-    "test:connectors": "node --env-file-if-exists=.env --test scripts/connectors.integration.mjs"
+    "test:connectors": "node --env-file-if-exists=.env --test scripts/connectors.integration.mjs",
+    "test:releases": "node --env-file-if-exists=.env --test scripts/releases.integration.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

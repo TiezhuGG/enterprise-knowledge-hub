@@ -111,3 +111,13 @@ npm run test:connectors
 ```
 
 集成测试需要 PostgreSQL、Redis 和开发版本化S3（Moto），使用隔离schema/bucket/临时目录，不读真实企业目录。测试独立Worker重启、重放、分批恢复、撤权及故障门禁。
+
+## P2-05 索引发布与安全重建
+
+应用迁移012后，按[索引发布说明](p2-05-index-publication.md)保留新旧编码器配置，并在API/Worker同时配置服务器别名。文档索引详情可显式发布扫描通过的最新版本；资料库文档界面提供影子计划、追赶、完整核验/对照、切换和回滚。
+
+```sh
+npm run test:releases
+```
+
+测试使用隔离PG/S3/队列、真实Milvus Lite和受控编码器，不需要下载或部署真实模型。正式质量验收仍需真实脱敏题集与有发布权限者的人工复核。

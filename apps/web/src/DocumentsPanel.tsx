@@ -1,3 +1,4 @@
+import {ReleasesPanel} from './ReleasesPanel';
 import {ConnectorsPanel} from './ConnectorsPanel';
 import {CleanupsPanel} from './CleanupsPanel';
 import {CorrectionsPanel} from './CorrectionsPanel';
@@ -64,6 +65,7 @@ export function DocumentsPanel({kb,session,onExpired}:{kb:KnowledgeBase;session:
   async function removeDocument(){if(!deleting)return;setBusy(true);setError('');try{await request(`/documents/${deleting.id}`,{method:'DELETE',headers:{'If-Match':deleteEtag,'Idempotency-Key':deleteKey}});if(target?.id===deleting.id)chooseTarget(null);setDeleting(null);setMessage('文档访问已失效，物理清理进度见删除与清理记录。');await refresh()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
   return <Space direction="vertical" size="middle" style={{width:'100%'}}>
     <Modal title="删除文档" open={!!deleting} onCancel={()=>setDeleting(null)} onOk={()=>void removeDocument()} okText="确认删除" okButtonProps={{danger:true}} confirmLoading={busy}><Typography.Paragraph>删除“{deleting?.title}”后无法恢复；原文、历史引用和后续检索会立即不可用。对象和向量在保留期后异步清理，可查看处理记录。</Typography.Paragraph>{error&&<Alert type="error" message={error}/>}</Modal>
+    {['manage','read','write','publish'].every(a=>kb.capabilities.includes(a as never))&&<ReleasesPanel kb={kb} session={session} onExpired={onExpired}/>}
     {kb.capabilities.includes('manage')&&<ConnectorsPanel kb={kb} session={session} onExpired={onExpired}/>}
     {kb.capabilities.includes('delete')&&<CleanupsPanel key={message} kb={kb} session={session} onExpired={onExpired}/>}
     {error&&<Alert role="alert" type="error" showIcon message={error}/>}
@@ -89,7 +91,7 @@ export function DocumentsPanel({kb,session,onExpired}:{kb:KnowledgeBase;session:
       </List.Item>}/>{versionNext&&<Button onClick={()=>void showVersions(viewing,versionNext)}>加载更多版本</Button>}
     </Card>}
     <Modal title="版本问题与人工纠错" open={!!correctionVersion} onCancel={()=>setCorrectionVersion(null)} footer={null} width={900} destroyOnHidden>{viewing&&correctionVersion&&<CorrectionsPanel key={correctionVersion.id} documentId={viewing.id} versionId={correctionVersion.id} session={session} onExpired={onExpired}/>}</Modal>
-    <Modal title="向量索引与模型版本" open={!!indexVersion} onCancel={()=>setIndexVersion(null)} footer={null} width={800} destroyOnHidden>{viewing&&indexVersion&&<IndexPanel key={indexVersion.id} documentId={viewing.id} version={indexVersion} session={session} canWrite={viewing.capabilities.includes('write')} onExpired={onExpired}/>}</Modal>
+    <Modal title="向量索引与模型版本" open={!!indexVersion} onCancel={()=>setIndexVersion(null)} footer={null} width={800} destroyOnHidden>{viewing&&indexVersion&&<IndexPanel key={indexVersion.id} documentId={viewing.id} version={indexVersion} session={session} canWrite={viewing.capabilities.includes('write')} canPublish={viewing.capabilities.includes('publish')} onExpired={onExpired}/>}</Modal>
     <Modal title="分块与来源核验" open={!!chunkVersion} onCancel={()=>setChunkVersion(null)} footer={null} width={900} destroyOnHidden>{viewing&&chunkVersion&&<ChunkPanel key={chunkVersion.id} documentId={viewing.id} version={chunkVersion} onExpired={onExpired} onSource={blockId=>{setFocusBlockId(blockId);setParsedVersion(chunkVersion);setChunkVersion(null)}}/>}</Modal>
     <Modal title="文档结构与原文定位" open={!!parsedVersion} onCancel={()=>setParsedVersion(null)} footer={null} width={900} destroyOnHidden>{viewing&&parsedVersion&&<ParsedPanel key={`${parsedVersion.id}:${focusBlockId??"all"}`} focusBlockId={focusBlockId} documentId={viewing.id} version={parsedVersion} allowDownload={viewing.capabilities.includes('download')} session={session} onExpired={onExpired}/>}</Modal>
   </Space>;

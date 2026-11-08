@@ -42,6 +42,7 @@ jobs:
       - run: npm run test:hybrid
       - run: npm run test:reranking
       - run: npm run test:connectors
+      - run: npm run test:releases
       - name: Worker queue and independent restart
         run: |
           node --env-file=.env apps/worker/dist/main.js > /tmp/worker.log 2>&1 &

@@ -1,3 +1,4 @@
+import {indexProfileHash} from './index-profiles';
 import { rerank, rerankProfile, rerankOptions, contextOptions, rerankInputs, RerankFailure } from './reranking';
 import { hybridOptions, reciprocalRankFusion, canDegrade } from './fusion';
 import { bm25, lexicalQuery, LEXICAL_VERSION, DICTIONARY_HASH } from './lexical';
@@ -101,9 +102,11 @@ export class RetrievalStore extends IndexingStore {
     private async denseCandidates(current: IdentityContext, input: SearchInput, signal: AbortSignal, targets: Target[], depth?: number): Promise<Candidate[]> {
         let profile;
         try {
-            profile = embeddingProfile();
+            if(new Set(targets.map(t=>t.profile_hash)).size!==1)fail(503,'SEARCH_MODEL_SPACE_MIXED');
+            profile = indexProfileHash(targets[0]!.profile_hash);
         }
-        catch {
+        catch(error) {
+            if(error instanceof ResourceError)throw error;
             fail(503, 'SEARCH_NOT_CONFIGURED');
         }
         if (!profile)

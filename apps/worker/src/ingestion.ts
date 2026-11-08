@@ -4,7 +4,7 @@ import { Queue, Worker, type Job } from 'bullmq';
 import { parseIsolated,parserLimits,PARSER_VERSION,ParserFailure } from '@zhiheng/parser';
 import { redisConfig } from '@zhiheng/config';
 import { INGEST_JOB_NAME, type IngestionDelivery } from '@zhiheng/contracts';
-import { IndexingStore, embeddingProfile, IndexFailure, S3Objects, ingestionConfig, uploadLimits, sha256, ResourceError, type AttemptLease } from '@zhiheng/resources';
+import { IndexingStore, embeddingProfile, indexProfiles, indexProfileHash, IndexFailure, S3Objects, ingestionConfig, uploadLimits, sha256, ResourceError, type AttemptLease } from '@zhiheng/resources';
 
 export class IngestionRuntime {
   private readonly config=ingestionConfig();
@@ -36,7 +36,7 @@ export class IngestionRuntime {
       await this.store.recoverExpired();
       if(this.config.parserEnabled)await this.store.resumeWaitingParsers();
       if(this.config.chunkerEnabled)await this.store.resumeWaitingChunkers();
-      if(this.indexProfile)await this.store.resumeWaitingIndexers(this.indexProfile);
+      for(const profile of indexProfiles().values())await this.store.resumeWaitingIndexers(profile);
       for(const delivery of await this.store.reserveDeliveries()){
         if(this.stopping){await this.store.releaseDelivery(delivery);continue}
         try{await this.queue!.add(INGEST_JOB_NAME,delivery,{jobId:`ingest-${delivery.job_id}-${delivery.revision}`,attempts:1,removeOnComplete:true,removeOnFail:100});await this.store.acknowledgeDelivery(delivery)}
@@ -56,9 +56,10 @@ export class IngestionRuntime {
     },Math.max(200,Math.floor(this.config.leaseMs/3)));
     const deadline=setTimeout(()=>controller.abort(),this.config.deadlineMs);
     try{
-      const indexed=await this.store.resumeChunked(lease,!!this.indexProfile);if(indexed==='closed')return;if(indexed==='ready'){await this.store.indexLease(lease,this.indexProfile!,controller.signal);return}
+      let indexProfile=this.indexProfile;try{if(lease.indexing_profile_hash)indexProfile=indexProfileHash(lease.indexing_profile_hash)}catch{await this.store.failAttempt(lease,'INDEX_PROFILE_UNAVAILABLE',false);return}
+      const indexed=await this.store.resumeChunked(lease,!!indexProfile);if(indexed==='closed')return;if(indexed==='ready'){await this.store.indexLease(lease,indexProfile!,controller.signal);return}
       const prior=await this.store.resumeParsed(lease,this.config.chunkerEnabled);
-      if(prior==='closed')return;if(prior==='ready'){const chunked=await this.store.chunkLease(lease,controller.signal,!!this.indexProfile);if(chunked&&this.indexProfile)await this.store.indexLease(lease,this.indexProfile,controller.signal);return}
+      if(prior==='closed')return;if(prior==='ready'){const chunked=await this.store.chunkLease(lease,controller.signal,!!indexProfile);if(chunked&&indexProfile)await this.store.indexLease(lease,indexProfile,controller.signal);return}
       let digest=lease.source.sha256,bytes:Buffer|undefined;
       if(!lease.checkpoint){bytes=await this.objects.read(lease.source.key,lease.source.version,lease.source.size,controller.signal);digest=sha256(bytes);if(bytes.length!==lease.source.size||digest!==lease.source.sha256){await this.store.failAttempt(lease,'SOURCE_INTEGRITY_MISMATCH',false);return}}
       if(controller.signal.aborted){await this.fail(lease,'WORKER_ERROR');return}
@@ -70,7 +71,7 @@ export class IngestionRuntime {
       const output=await parseIsolated(bytes,lease.source.mime==='text/plain'&&lease.source.filename.toLowerCase().endsWith('.md')?'text/markdown':lease.source.mime,controller.signal,this.limits);
       if(controller.signal.aborted){await this.fail(lease,'WORKER_ERROR');return}
       const saved=await this.store.completeParsing(lease,output,this.config.chunkerEnabled);
-      if(saved&&this.config.chunkerEnabled){const chunked=await this.store.chunkLease(lease,controller.signal,!!this.indexProfile);if(chunked&&this.indexProfile)await this.store.indexLease(lease,this.indexProfile,controller.signal);}
+      if(saved&&this.config.chunkerEnabled){const chunked=await this.store.chunkLease(lease,controller.signal,!!indexProfile);if(chunked&&indexProfile)await this.store.indexLease(lease,indexProfile,controller.signal);}
     }catch(error){if(error instanceof ResourceError&&error.code==='EMBEDDING_OUTCOME_UNKNOWN'){await this.store.failAttempt(lease,error.code,false)}else if(error instanceof IndexFailure&&error.code!=='INDEX_CANCELLED'){await this.store.failAttempt(lease,error.code,error.retryable,error.retryAfterMs)}else if(error instanceof ChunkFailure&&error.code!=='CHUNK_CANCELLED'){await this.store.failAttempt(lease,error.code,false)}else if(error instanceof ParserFailure&&error.code!=='PARSER_CANCELLED'){await this.store.failAttempt(lease,error.code,false)}else if(error instanceof ResourceError&&error.status===422){await this.store.failAttempt(lease,error.code.startsWith('PARSE')||error.code.startsWith('CHUNK')?error.code:'SOURCE_INTEGRITY_MISMATCH',false)}else await this.fail(lease,this.stopping||controller.signal.aborted?'WORKER_ERROR':'SOURCE_UNAVAILABLE')}
     finally{clearInterval(pulse);clearTimeout(deadline);this.active.delete(controller)}
   }
